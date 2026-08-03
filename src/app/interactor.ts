@@ -1,7 +1,14 @@
-import type { InteractionEnv } from '../core/discord/adapter.ts';
+import type { InteractionEnv, ComponentClick } from '../core/discord/adapter.ts';
 import { capabilityLabel, Pipeline } from '../core/internal/pipeline.ts';
 import type { Registry } from '../core/internal/registry.ts';
-import type { ChannelMemory, Input, Logger, Result, Store } from '../core/types.ts';
+import type {
+  Capability,
+  ChannelMemory,
+  Input,
+  Logger,
+  Result,
+  Store,
+} from '../core/types.ts';
 import type { ServiceMap } from '../core/service.ts';
 
 export interface InteractorDeps {
@@ -37,22 +44,17 @@ export class InteractionInteractor {
     };
 
     try {
-      const pre = await this.deps.pipeline.checkPreconditions(handler, ctx, env.preconditions);
+      const pre = await this.deps.pipeline.checkPreconditions(handler.preconditions, ctx, env.preconditions);
       if (!pre.ok) {
         return { kind: 'message', content: pre.reason ?? 'Нет доступа', ephemeral: true };
       }
 
-      const missing = this.deps.pipeline.missingCapabilities(handler, env.granted);
+      const missing = this.deps.pipeline.missingCapabilities(handler.capabilities, env.granted);
       if (missing.length > 0) {
-        const list = missing.map(capabilityLabel).join(', ');
-        return {
-          kind: 'message',
-          content: `У бота нет прав в этом канале: ${list}. Выдайте их и повторите команду.`,
-          ephemeral: true,
-        };
+        return { kind: 'message', content: capabilityError(missing), ephemeral: true };
       }
 
-      return await this.deps.pipeline.run(handler, ctx);
+      return withCustomIds(await this.deps.pipeline.run(handler, ctx), handler.name);
     } catch (err) {
       this.deps.logger.error(`Ошибка команды /${handler.name}`, err);
       return {
@@ -61,5 +63,85 @@ export class InteractionInteractor {
         ephemeral: true,
       };
     }
+  }
+
+  /**
+   * Обрабатывает нажатие кнопки: роутинг customId → предусловия → capabilities → run.
+   * `input` для предусловий строится от имени хэндлера-владельца кнопки.
+   */
+  async handleComponent(click: ComponentClick, env: InteractionEnv): Promise<Result | undefined> {
+    const found = this.deps.registry.findComponent(click.customId);
+    if (!found) return undefined;
+    const { module, handler, component, payload } = found;
+    const store = this.deps.storeFor(module.name);
+    if (!store) return undefined;
+
+    const ctx = {
+      input: {
+        commandName: handler.name,
+        args: {},
+        author: click.author,
+        channel: click.channel,
+      },
+      store,
+      memory: this.deps.memory,
+      logger: this.deps.logger,
+      services: this.deps.servicesFor(module.name),
+      customId: click.customId,
+      payload,
+    };
+
+    try {
+      const pre = await this.deps.pipeline.checkPreconditions(component.preconditions ?? [], ctx, env.preconditions);
+      if (!pre.ok) {
+        return { kind: 'message', content: pre.reason ?? 'Нет доступа', ephemeral: true };
+      }
+
+      const missing = this.deps.pipeline.missingCapabilities(component.capabilities ?? [], env.granted);
+      if (missing.length > 0) {
+        return { kind: 'message', content: capabilityError(missing), ephemeral: true };
+      }
+
+      return withCustomIds(await component.run(ctx), handler.name);
+    } catch (err) {
+      this.deps.logger.error(`Ошибка кнопки ${click.customId}`, err);
+      return {
+        kind: 'message',
+        content: 'Произошла ошибка при выполнении команды.',
+        ephemeral: true,
+      };
+    }
+  }
+}
+
+function capabilityError(missing: readonly Capability[]): string {
+  const list = missing.map(capabilityLabel).join(', ');
+  return `У бота нет прав в этом канале: ${list}. Выдайте их и повторите команду.`;
+}
+
+/**
+ * Проставляет реальные customId кнопкам в Result: <handler>:<id>.
+ * Рекурсивно для multiple/update; link-кнопки (url) пропускаются.
+ */
+export function withCustomIds(result: Result, handlerName: string): Result {
+  switch (result.kind) {
+    case 'component':
+      return {
+        ...result,
+        rows: result.rows.map((row) => ({
+          buttons: row.buttons.map((b) =>
+            b.url || !b.id ? b : { ...b, id: `${handlerName}:${b.id}` },
+          ),
+        })),
+      };
+    case 'multiple':
+      return { ...result, results: result.results.map((r) => withCustomIds(r, handlerName)) };
+    case 'update':
+      return {
+        ...result,
+        result: withCustomIds(result.result, handlerName) as Exclude<Result, { kind: 'update' }>,
+      };
+    default:
+      return result;
   }
 }

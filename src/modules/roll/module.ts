@@ -1,4 +1,8 @@
-import { arg, defineHandler, defineModule } from '../../core/index.ts';
+import { arg, defineHandler, defineModule, type ComponentRow } from '../../core/index.ts';
+
+const REROLL_BUTTON: ComponentRow = {
+  buttons: [{ id: 'reroll', label: '🎲 Ещё раз', style: 'primary' }],
+};
 
 export default defineModule({
   name: 'roll',
@@ -10,7 +14,7 @@ export default defineModule({
       args: {
         dice: arg.string('Формула броска, например 2d6').default('2d6'),
       },
-      run: async ({ args }) => {
+      run: async ({ args, store, input }) => {
         const parsed = parseDice(args.dice);
         if (!parsed) {
           return {
@@ -19,19 +23,45 @@ export default defineModule({
             ephemeral: true,
           };
         }
-        const results = Array.from(
-          { length: parsed.count },
-          () => 1 + Math.floor(Math.random() * parsed.sides),
-        );
-        const total = results.reduce((a, b) => a + b, 0);
-        return {
-          kind: 'message',
-          content: `🎲 ${parsed.count}d${parsed.sides} → [${results.join(', ')}] = **${total}**`,
-        };
+        await store.set(`last:${input.author.id}`, args.dice);
+        return rollResult(parsed);
       },
+      components: [
+        {
+          id: 'reroll',
+          description: 'Бросает кубики ещё раз и обновляет сообщение',
+          run: async ({ store, input }) => {
+            const formula = (await store.get<string>(`last:${input.author.id}`)) ?? '2d6';
+            const parsed = parseDice(formula);
+            if (!parsed) {
+              return { kind: 'message', content: 'Не удалось повторить бросок', ephemeral: true };
+            }
+            return {
+              kind: 'update',
+              result: rollResult(parsed),
+            };
+          },
+        },
+      ],
     }),
   ],
 });
+
+/** Роллит кубики и возвращает Result с кнопкой переброса (без kind=update — он не вкладывается). */
+function rollResult(
+  parsed: { count: number; sides: number },
+): Exclude<import('../../core/index.ts').Result, { kind: 'update' }> {
+  const results = Array.from(
+    { length: parsed.count },
+    () => 1 + Math.floor(Math.random() * parsed.sides),
+  );
+  const total = results.reduce((a, b) => a + b, 0);
+  return {
+    kind: 'component',
+    content: `🎲 ${parsed.count}d${parsed.sides} → [${results.join(', ')}] = **${total}**`,
+    rows: [REROLL_BUTTON],
+  };
+}
 
 function parseDice(formula: string): { count: number; sides: number } | null {
   const match = /^(\d*)d(\d+)$/i.exec(formula.trim());

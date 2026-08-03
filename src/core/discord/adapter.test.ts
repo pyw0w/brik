@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import type { ChatInputCommandInteraction } from 'discord.js';
-import { createFakeInteraction } from '../testing.ts';
+import type { ButtonInteraction, ChatInputCommandInteraction } from 'discord.js';
+import { createFakeButtonInteraction, createFakeInteraction } from '../testing.ts';
 import { createLogger } from '../internal/logger.ts';
 import {
   dispatchInteraction,
@@ -14,9 +14,14 @@ import {
 } from './adapter.ts';
 
 type Fake = ReturnType<typeof createFakeInteraction>;
+type FakeButton = ReturnType<typeof createFakeButtonInteraction>;
 
 function asChat(fake: Fake): ChatInputCommandInteraction {
   return fake as unknown as ChatInputCommandInteraction;
+}
+
+function asButton(fake: FakeButton): ButtonInteraction {
+  return fake as unknown as ButtonInteraction;
 }
 
 const logger = createLogger('test', 'error');
@@ -110,6 +115,37 @@ describe('resultToPayload', () => {
     });
     expect(payload.content).toBe('a\nb');
   });
+
+  test('component: кнопки с customId, стилем и эмодзи', () => {
+    const payload = resultToPayload({
+      kind: 'component',
+      content: 'выбор',
+      rows: [
+        {
+          buttons: [
+            { id: 'roll:reroll', label: '🎲 Ещё', style: 'primary' },
+            { id: 'roll:page:2', label: '2' },
+            { id: 'site', label: 'Сайт', style: 'link', url: 'https://x.example' },
+          ],
+        },
+      ],
+    });
+    expect(payload.content).toBe('выбор');
+    const row = payload.components?.[0] as { components: unknown[] } | undefined;
+    expect(row?.components.length).toBe(3);
+  });
+
+  test('component без content — только кнопки', () => {
+    const payload = resultToPayload({ kind: 'component', rows: [{ buttons: [{ id: 'a', label: 'A' }] }] });
+    expect(payload.content).toBeUndefined();
+    expect(payload.components?.length).toBe(1);
+  });
+
+  test('update недопустим внутри payload → бросает', () => {
+    expect(() =>
+      resultToPayload({ kind: 'update', result: { kind: 'message', content: 'x' } }),
+    ).toThrow('sendResult');
+  });
 });
 
 describe('toApiEmbed', () => {
@@ -133,6 +169,43 @@ describe('sendResult', () => {
     expect(fake.replies).toEqual([]);
     expect(fake.followUps).toEqual([{ content: 'дальше' }]);
   });
+
+  test('update на кнопке — interaction.update (без ephemeral)', async () => {
+    const fake = createFakeButtonInteraction({ customId: 'roll:reroll' });
+    await sendResult(asButton(fake), {
+      kind: 'update',
+      result: { kind: 'message', content: 'новый результат', ephemeral: true },
+    });
+    expect(fake.updates).toEqual([{ content: 'новый результат' }]);
+    expect(fake.replies).toEqual([]);
+  });
+
+  test('update с component-Result сохраняет кнопки и срезает ephemeral', async () => {
+    const fake = createFakeButtonInteraction({ customId: 'list:page' });
+    await sendResult(asButton(fake), {
+      kind: 'update',
+      result: { kind: 'component', rows: [{ buttons: [{ id: 'list:page:2', label: '2' }] }], ephemeral: true },
+    });
+    expect(fake.updates).toHaveLength(1);
+    expect(fake.updates[0]).toMatchObject({ components: expect.anything() });
+  });
+
+  test('если reply упал — fallback на followUp', async () => {
+    const fake = createFakeInteraction();
+    fake.reply = async () => { throw new Error('discord timeout'); };
+    await sendResult(asChat(fake), { kind: 'message', content: 'всё равно доставлю' });
+    expect(fake.replies).toEqual([]);
+    expect(fake.followUps).toEqual([{ content: 'всё равно доставлю' }]);
+  });
+
+  test('update из slash-команды деградирует до reply', async () => {
+    const fake = createFakeInteraction();
+    await sendResult(asChat(fake), {
+      kind: 'update',
+      result: { kind: 'message', content: 'просто ответ' },
+    });
+    expect(fake.replies).toEqual([{ content: 'просто ответ' }]);
+  });
 });
 
 describe('dispatchInteraction', () => {
@@ -140,22 +213,64 @@ describe('dispatchInteraction', () => {
     const fake = createFakeInteraction({ commandName: 'ping' });
     const handler: InteractionHandler = {
       handle: async (input) => ({ kind: 'message', content: `ok:${input.commandName}` }),
+      handleComponent: async () => undefined,
     };
     await dispatchInteraction(asChat(fake), { handler, owners: [], logger });
     expect(fake.replies).toEqual([{ content: 'ok:ping' }]);
   });
 
-  test('не-chat-input взаимодействие игнорируется', async () => {
-    const fake = { isChatInputCommand: () => false };
-    const handler: InteractionHandler = { handle: async () => ({ kind: 'message', content: 'x' }) };
+  test('не-chat-input и не-кнопка игнорируется', async () => {
+    const fake = { isChatInputCommand: () => false, isButton: () => false };
+    const handler: InteractionHandler = {
+      handle: async () => ({ kind: 'message', content: 'x' }),
+      handleComponent: async () => undefined,
+    };
     await dispatchInteraction(fake as unknown as ChatInputCommandInteraction, { handler, owners: [], logger });
     expect((fake as { isChatInputCommand: () => boolean }).isChatInputCommand()).toBe(false);
   });
 
   test('undefined от handler — без ответа', async () => {
     const fake = createFakeInteraction({ commandName: 'unknown' });
-    const handler: InteractionHandler = { handle: async () => undefined };
+    const handler: InteractionHandler = {
+      handle: async () => undefined,
+      handleComponent: async () => undefined,
+    };
     await dispatchInteraction(asChat(fake), { handler, owners: [], logger });
     expect(fake.replies).toEqual([]);
+  });
+
+  test('кнопка: роутит клик в handleComponent и доставляет', async () => {
+    const fake = createFakeButtonInteraction({ customId: 'roll:reroll' });
+    const handler: InteractionHandler = {
+      handle: async () => undefined,
+      handleComponent: async (click) => ({ kind: 'message', content: `click:${click.customId}` }),
+    };
+    await dispatchInteraction(asButton(fake), { handler, owners: [], logger });
+    expect(fake.replies).toEqual([{ content: 'click:roll:reroll' }]);
+  });
+
+  test('кнопка: update-Result перезаписывает сообщение', async () => {
+    const fake = createFakeButtonInteraction({ customId: 'roll:reroll' });
+    const handler: InteractionHandler = {
+      handle: async () => undefined,
+      handleComponent: async () => ({ kind: 'update', result: { kind: 'message', content: 'бросок обновлён' } }),
+    };
+    await dispatchInteraction(asButton(fake), { handler, owners: [], logger });
+    expect(fake.updates).toEqual([{ content: 'бросок обновлён' }]);
+    expect(fake.replies).toEqual([]);
+  });
+
+  test('кнопка: падение handleComponent даёт понятную ошибку', async () => {
+    const fake = createFakeButtonInteraction({ customId: 'boom:id' });
+    const handler: InteractionHandler = {
+      handle: async () => undefined,
+      handleComponent: async () => { throw new Error('взрыв'); },
+    };
+    await dispatchInteraction(asButton(fake), {
+      handler,
+      owners: [],
+      logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+    });
+    expect(fake.replies).toEqual([{ content: 'Произошла ошибка при выполнении команды.', ephemeral: true }]);
   });
 });

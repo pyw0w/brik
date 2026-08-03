@@ -4,7 +4,13 @@ export { arg } from './args.ts';
 export type { ArgSpec, ArgOptionType, ArgsOf, ArgsSchema } from './args.ts';
 
 export { defineHandler } from './handler.ts';
-export type { Handler, HandlerDef, HandlerRunContext } from './handler.ts';
+export type {
+  Handler,
+  HandlerDef,
+  HandlerRunContext,
+  ComponentHandlerDef,
+  ComponentRunContext,
+} from './handler.ts';
 
 export { defineService } from './service.ts';
 export type { Service, ServiceDef, ServiceInitContext, ServiceMap } from './service.ts';
@@ -20,11 +26,14 @@ export type {
 
 export { CHANNEL_CAPABILITIES } from './types.ts';
 export type {
+  ButtonStyle,
   Capability,
   ChannelMemory,
   ChannelRef,
   CommandCatalog,
   CommandInfo,
+  ComponentButton,
+  ComponentRow,
   Input,
   Logger,
   PreconditionContext,

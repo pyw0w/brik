@@ -30,13 +30,13 @@ interface CooldownEntry {
 export class Pipeline {
   private readonly cooldowns = new Map<string, CooldownEntry>();
 
-  /** Проверяет предусловия Handler-а. Возвращает outcome; при !ok доставка не происходит. */
+  /** Проверяет предусловия. Возвращает outcome; при !ok доставка не происходит. */
   async checkPreconditions(
-    handler: Handler,
+    preconditions: readonly PreconditionSpec[],
     ctx: HandlerRunContext,
     env: PreconditionEnv = {},
   ): Promise<PreconditionOutcome> {
-    for (const spec of handler.preconditions) {
+    for (const spec of preconditions) {
       const outcome = await this.evaluatePrecondition(spec, ctx, env);
       if (!outcome.ok) return outcome;
     }
@@ -98,8 +98,11 @@ export class Pipeline {
   }
 
   /** Список Capability-ей, которых не хватает Bot-у в канале. */
-  missingCapabilities(handler: Handler, granted: ReadonlySet<Capability>): Capability[] {
-    return handler.capabilities.filter((c) => !granted.has(c));
+  missingCapabilities(
+    capabilities: readonly Capability[],
+    granted: ReadonlySet<Capability>,
+  ): Capability[] {
+    return capabilities.filter((c) => !granted.has(c));
   }
 
   clearCooldowns(): void {

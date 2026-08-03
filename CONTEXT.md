@@ -40,6 +40,10 @@ _Avoid_: database, memory, cache
 Именованная глобальная зависимость модуля (API-клиент, соединение), живёт в `src/services/<name>/service.ts`, объявлена через `defineService`, расширяет `ServiceMap`; модуль получает её типизированно в `ctx.services`.
 _Avoid_: plugin, connector, third-party
 
+**Component**:
+Кликабельная кнопка, объявленная на Handler-е в `components`, отрисованная через `Result` kind `'component'` и маршрутизированная по `customId` `<handler>:<component>[:<payload>]`. Клик обрабатывает component-хэндлер (тот же гейт-флоу, что и команда).
+_Avoid_: кнопка (как самостоятельный тип), action, widget
+
 **Registry**:
 Реестр обнаруженных модулей и Handler-ов (авто-дискавери по конвенции); источник истины о том, что доступно для включения.
 _Avoid_: index, collection
