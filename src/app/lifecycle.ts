@@ -5,8 +5,10 @@ import { toSlashCommand } from '../core/discord/registrar.ts';
 import { envToken, type BotConfig, type ModuleEntry } from '../core/internal/config.ts';
 import { Pipeline } from '../core/internal/pipeline.ts';
 import type { Registry } from '../core/internal/registry.ts';
+import type { ServiceRegistry } from '../core/internal/service-registry.ts';
 import { FileStore } from '../core/internal/store.ts';
 import type { Module } from '../core/module.ts';
+import type { Service, ServiceMap } from '../core/service.ts';
 import type { ChannelMemory, CommandCatalog, Logger } from '../core/types.ts';
 
 export interface LifecycleDeps {
@@ -16,8 +18,11 @@ export interface LifecycleDeps {
   logger: Logger;
   config: BotConfig;
   modulesDir: string;
+  servicesDir: string;
   dataDir: string;
   stores: Map<string, FileStore>;
+  serviceRegistry: ServiceRegistry;
+  services: Map<string, unknown>;
   /** undefined — не подключаться к Discord (режим без сети, тесты). */
   gatewayFactory?: ((onReady: (client: Client) => Promise<void>) => Gateway) | undefined;
 }
@@ -34,10 +39,13 @@ export class Lifecycle {
     const { registry, config, logger } = this.deps;
 
     await registry.discover(this.deps.modulesDir);
+    await this.deps.serviceRegistry.discover(this.deps.servicesDir);
     this.enabledModules = this.resolveEnabledModules();
     logger.info(
       `Обнаружено модулей: ${registry.size}, включено: ${this.enabledModules.length}`,
     );
+
+    await this.initServices();
 
     this.commands = {
       list: () =>
@@ -71,6 +79,15 @@ export class Lifecycle {
       }
     }
     this.deps.pipeline.clearCooldowns();
+    for (const [name, api] of [...this.deps.services].reverse()) {
+      const svc = this.deps.serviceRegistry.find(name);
+      if (!svc?.close) continue;
+      try {
+        await svc.close(api);
+      } catch (err) {
+        this.deps.logger.error(`close сервиса "${name}" упал`, err);
+      }
+    }
     await this.gateway?.destroy();
   }
 
@@ -104,7 +121,7 @@ export class Lifecycle {
     for (const mod of this.enabledModules) {
       const store = new FileStore(mod.name, this.deps.dataDir);
       this.deps.stores.set(mod.name, store);
-      const ctx = { store, memory: this.deps.memory, logger: this.deps.logger, commands: this.commands, services: {} };
+      const ctx = { store, memory: this.deps.memory, logger: this.deps.logger, commands: this.commands, services: this.servicesMap() };
       try {
         mod.setup?.(ctx);
       } catch (err) {
@@ -124,11 +141,49 @@ export class Lifecycle {
           memory: this.deps.memory,
           logger: this.deps.logger,
           commands: this.commands,
-          services: {},
+          services: this.servicesMap(),
         });
       } catch (err) {
         this.deps.logger.error(`onReady модуля "${mod.name}" упал`, err);
       }
     }
+  }
+
+  private servicesMap(): ServiceMap {
+    return Object.fromEntries(this.deps.services) as ServiceMap;
+  }
+
+  private async initServices(): Promise<void> {
+    const needed = new Set<string>();
+    for (const mod of this.enabledModules) {
+      for (const name of mod.services ?? []) needed.add(name);
+    }
+    for (const name of needed) {
+      const svc = this.deps.serviceRegistry.find(name) as Service<unknown> | undefined;
+      if (!svc) throw new Error(`Сервис "${name}" объявлен модулями, но не найден в src/services`);
+      const entry = this.deps.config.services?.[name];
+      if (entry && entry.enabled === false) {
+        throw new Error(`Сервис "${name}" отключён в конфиге, но нужен модулю`);
+      }
+      const options = this.serviceOptions(svc, entry);
+      try {
+        const api = await svc.init({ options, logger: this.deps.logger, memory: this.deps.memory });
+        this.deps.services.set(name, api);
+      } catch (err) {
+        throw new Error(`Сервис "${name}": init упал: ${String(err)}`);
+      }
+    }
+  }
+
+  private serviceOptions(svc: Service<unknown>, entry: ModuleEntry | undefined): unknown {
+    const schema = svc.optionsSchema as z.ZodType | undefined;
+    const raw = entry?.options ?? {};
+    if (!schema) return raw;
+    const result = schema.safeParse(raw);
+    if (!result.success) {
+      const issues = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+      throw new Error(`Опции сервиса "${svc.name}" невалидны: ${issues}`);
+    }
+    return result.data;
   }
 }

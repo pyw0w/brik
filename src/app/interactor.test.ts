@@ -34,6 +34,7 @@ function makeInteractor() {
     memory: new InMemoryChannelMemory(),
     logger,
     storeFor: (name) => stores.get(name),
+    servicesFor: () => ({}),
   });
   return interactor;
 }
@@ -101,6 +102,7 @@ describe('InteractionInteractor', () => {
       memory: new InMemoryChannelMemory(),
       logger,
       storeFor: (name) => stores.get(name),
+    servicesFor: () => ({}),
     });
     const result = await interactor.handle(createInput({ commandName: 'boom' }), fullGrant);
     expect(result).toMatchObject({ kind: 'message', ephemeral: true });
@@ -121,6 +123,7 @@ describe('InteractionInteractor', () => {
       memory: new InMemoryChannelMemory(),
       logger,
       storeFor: () => undefined,
+      servicesFor: () => ({}),
     });
     const result = await interactor.handle(createInput({ commandName: 'nostore' }), fullGrant);
     expect(result).toBeUndefined();

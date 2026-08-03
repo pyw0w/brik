@@ -2,6 +2,7 @@ import type { InteractionEnv } from '../core/discord/adapter.ts';
 import { capabilityLabel, Pipeline } from '../core/internal/pipeline.ts';
 import type { Registry } from '../core/internal/registry.ts';
 import type { ChannelMemory, Input, Logger, Result, Store } from '../core/types.ts';
+import type { ServiceMap } from '../core/service.ts';
 
 export interface InteractorDeps {
   registry: Registry;
@@ -9,6 +10,7 @@ export interface InteractorDeps {
   memory: ChannelMemory;
   logger: Logger;
   storeFor(moduleName: string): Store | undefined;
+  servicesFor(moduleName: string): ServiceMap;
 }
 
 /**
@@ -26,7 +28,13 @@ export class InteractionInteractor {
     const store = this.deps.storeFor(module.name);
     if (!store) return undefined;
 
-    const ctx = { input, store, memory: this.deps.memory, logger: this.deps.logger, services: {} };
+    const ctx = {
+      input,
+      store,
+      memory: this.deps.memory,
+      logger: this.deps.logger,
+      services: this.deps.servicesFor(module.name),
+    };
 
     try {
       const pre = await this.deps.pipeline.checkPreconditions(handler, ctx, env.preconditions);
