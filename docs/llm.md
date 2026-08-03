@@ -145,7 +145,7 @@ External APIs/DBs are **not** the module's job (ADR-0002, extended to dependenci
 - **Typing**: a service augments the core's `ServiceMap` interface (`declare module '../../core/index.ts' { interface ServiceMap { weather: ... } }`) — no runtime registration, no global list to maintain.
 - **Lifecycle**: `init({ options, logger, memory })` runs **before** any module `setup`; optional `close(service)` runs on shutdown in reverse order. `init` returns the service object (the API client, connection, …).
 - **Options**: `services.<name>.options` in `bot.config.ts`, validated by the service's `optionsSchema` (zod).
-- **Generator**: `bun run create:service <name>` scaffolds `src/services/<name>/service.ts` (+ a test).
+- **Generator**: `bun run create:service <name>` scaffolds `src/services/<name>/service.ts`.
 - **Example**: the demo pair `src/services/weather/service.ts` + `src/modules/forecast/module.ts`.
 
 ## 7. Testing conventions
