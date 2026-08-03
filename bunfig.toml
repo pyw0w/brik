@@ -1,0 +1,7 @@
+[test]
+# Документация, скрипты и исследовательские заметки не содержат тестов.
+pathIgnorePatterns = ["docs/**", "scripts/**", "research/**", ".data/**"]
+# Временные конфиги тестов и прочее не считаются кодом проекта.
+coveragePathIgnorePatterns = [".data/**"]
+# Порог global-покрытия для `bun test --coverage` (0.7 = 70% строк).
+coverageThreshold = 0.7
