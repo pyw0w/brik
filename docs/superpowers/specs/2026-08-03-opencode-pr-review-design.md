@@ -46,8 +46,11 @@ env:
 Команда:
 
 ```bash
-opencode run -m opencode/deepseek-v4-flash-free "<промпт>"
+opencode run --auto -m opencode/deepseek-v4-flash-free --title "review PR #<n>" "<промпт>"
 ```
+
+- `--auto` — авто-одобрение разрешённых действий, без интерактивных запросов в CI.
+- Промпт передаётся позиционным аргументом (heredoc/переменная), номер PR подставляется из контекста workflow.
 
 Модель — текущая бесплатная `opencode/deepseek-v4-flash-free` (провайдер `opencode`, ключ Zen). Бесплатные модели Zen могут быть отключены в будущем — тогда модель заменить в одном месте.
 
@@ -123,9 +126,12 @@ on:
 
 Схема джобы `triage`:
 
-1. `actions/checkout@v4` с `fetch-depth: 1`, `persist-credentials: false`.
+1. `actions/checkout@v4` с `fetch-depth: 1`, `token: ${{ secrets.BOT_PAT }}` (креды нужны для git-push при создании PR-фиксов).
 2. Установка CLI: `curl -fsSL https://opencode.ai/install | bash`.
-3. Запуск через `opencode run` с промптом триажа.
+3. Установка bun (для проверок при PR-фиксах): `oven-sh/setup-bun@v2`.
+4. Запуск через `opencode run` с промптом триажа.
+
+Права джобы: `contents: write` (push ветки), `pull-requests: write` (создание PR), `issues: write` (комментарии, лейблы, закрытие).
 
 Окружение:
 
