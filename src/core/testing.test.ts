@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { createContext, runHandler } from './testing.ts';
-import { defineHandler } from './index.ts';
+import { defineHandler, type ServiceMap } from './index.ts';
 
 describe('testing helpers и services', () => {
   test('createContext даёт пустой services', () => {
@@ -17,7 +17,7 @@ describe('testing helpers и services', () => {
       },
     });
     const result = await runHandler(handler, {
-      services: { echo: { get: () => 'есть' } },
+      services: { echo: { get: () => 'есть' } } as unknown as ServiceMap,
     });
     if (result.kind === 'message') expect(result.content).toBe('есть');
   });
