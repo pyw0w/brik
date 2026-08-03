@@ -48,7 +48,7 @@ describe('Registry.discover', () => {
     const registry = new Registry();
     await registry.discover('src/modules');
     const names = registry.getModules().map((m) => m.name).sort();
-    expect(names).toEqual(['forecast', 'help', 'ping', 'roll']);
+    expect(names).toEqual(['anime', 'forecast', 'help', 'ping', 'roll']);
     expect(registry.findHandler('roll')).toBeDefined();
   });
 });
