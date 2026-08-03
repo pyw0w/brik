@@ -13,6 +13,7 @@
     "test": "bun test",
     "test:coverage": "bun test --coverage",
     "create:module": "bun scripts/create-module.ts",
+    "create:service": "bun scripts/create-service.ts",
     "deploy:commands": "bun scripts/deploy-commands.ts",
     "check:boundaries": "bun scripts/check-boundaries.ts",
     "docs:dev": "vitepress dev docs",
