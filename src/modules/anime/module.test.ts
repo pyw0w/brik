@@ -88,3 +88,64 @@ describe('модуль anime', () => {
     if (result.kind === 'message') expect(result.content).toContain('Не удалось получить данные от Shikimori');
   });
 });
+
+const details = {
+  id: 52991,
+  name: 'Sousou no Frieren',
+  russian: 'Фрирен',
+  kind: 'tv',
+  status: 'released',
+  score: 9.1,
+  episodes: 28,
+  url: 'https://shikimori.one/animes/52991',
+  airedOn: '2023-09-29',
+  duration: 24,
+  description: 'Длинное описание. '.repeat(20),
+  genres: [{ name: 'Adventure', russian: 'Приключения' }],
+  studios: [{ name: 'Madhouse', imageUrl: null }],
+  poster: { mainUrl: 'https://i.imgur.com/main.jpg', previewUrl: 'https://i.imgur.com/preview.jpg' },
+};
+
+describe('команда info', () => {
+  test('по id вызывает animeById', async () => {
+    const services = {
+      shikimori: {
+        search: async () => [],
+        top: async () => [],
+        animeById: async () => details,
+      },
+      weather: weatherStub,
+    };
+    const result = await runHandler(findHandler('info'), { args: { target: '52991' }, services });
+    expect(result.kind).toBe('embed');
+  });
+
+  test('по названию ищет id, затем берёт полную карточку', async () => {
+    const services = {
+      shikimori: {
+        search: async (q: string) => {
+          expect(q).toBe('Фрирен');
+          return [{ id: 52991, name: 'Sousou no Frieren', russian: 'Фрирен', kind: 'tv', status: 'released', score: 9.1, episodes: 28, url: 'https://shikimori.one/animes/52991', airedOn: '2023-09-29', poster: null }];
+        },
+        top: async () => [],
+        animeById: async (id: number) => {
+          expect(id).toBe(52991);
+          return details;
+        },
+      },
+      weather: weatherStub,
+    };
+    const result = await runHandler(findHandler('info'), { args: { target: 'Фрирен' }, services });
+    expect(result.kind).toBe('embed');
+  });
+
+  test('не найдено → «Аниме не найдено»', async () => {
+    const services = {
+      shikimori: { search: async () => [], top: async () => [], animeById: async () => null },
+      weather: weatherStub,
+    };
+    const result = await runHandler(findHandler('info'), { args: { target: 'zzz' }, services });
+    expect(result.kind).toBe('message');
+    if (result.kind === 'message') expect(result.content).toBe('Аниме не найдено.');
+  });
+});
