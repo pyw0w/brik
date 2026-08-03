@@ -68,6 +68,7 @@ Use these terms consistently in code, comments, and docs. Avoid synonyms (`plugi
 | **Precondition** | A check before the handler runs (user perms, cooldown, NSFW channel…); built-in set + custom hook | guard, middleware |
 | **Store** | Persistent KV provided by the core, namespaced per module; also per-channel dialog memory for multi-step flows | database, memory, cache |
 | **Service** | Named global dependency of modules (API client, connection) in `src/services/<name>/service.ts` via `defineService`; extends `ServiceMap`, injected typed as `ctx.services.<name>` | plugin, connector, third-party |
+| **Component** | Clickable button declared on a Handler (`components`), rendered via `Result` kind `'component'`, routed by `customId` `<handler>:<component>[:<payload>]` | button, action, widget |
 | **Registry** | Registry of discovered modules/handlers (auto-discovery); source of truth for what can be enabled | index, collection |
 | **Enable** | A `bot.config.ts` decision about which modules are active and with which options | register, activate, load |
 | **Core** | Public framework contract modules import: `src/core/index.ts`. Stable, documented | framework, runtime, kernel |
@@ -189,6 +190,8 @@ Architectural decisions live in `docs/adr/` (numbered). Read the relevant ones b
 - **0005** slash-commands-with-sync-split — slash commands, with registration split between dev-guild and global sync.
 - **0006** documentation-as-first-class — docs are a mandatory deliverable (guides, ADRs, glossary, TypeDoc).
 - **0007** core-internal-host-layering — the layering this guide describes; curated facade, boundary script, co-located tests, bun conventions.
+- **0008** services-as-lifecycle-managed-dependencies — external deps live as lifecycle-managed services.
+- **0009** component-interactions — buttons are first-class: `components` on a Handler, `Result` kinds `'component'`/`'update'`, `customId` routing.
 
 ## 10. AI agent do / don't
 

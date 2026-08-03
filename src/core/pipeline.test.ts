@@ -40,7 +40,7 @@ describe('Pipeline.checkPreconditions', () => {
       run: () => ({ kind: 'message', content: 'ok' }),
     });
     const pipeline = new Pipeline();
-    const out = await pipeline.checkPreconditions(h, baseCtx({ dm: true }));
+    const out = await pipeline.checkPreconditions(h.preconditions, baseCtx({ dm: true }));
     expect(out.ok).toBe(false);
   });
 
@@ -52,7 +52,7 @@ describe('Pipeline.checkPreconditions', () => {
       run: () => ({ kind: 'message', content: 'ok' }),
     });
     const pipeline = new Pipeline();
-    const out = await pipeline.checkPreconditions(h, baseCtx());
+    const out = await pipeline.checkPreconditions(h.preconditions, baseCtx());
     expect(out.ok).toBe(true);
   });
 
@@ -64,7 +64,7 @@ describe('Pipeline.checkPreconditions', () => {
       run: () => ({ kind: 'message', content: 'ok' }),
     });
     const pipeline = new Pipeline();
-    const out = await pipeline.checkPreconditions(h, baseCtx(), {
+    const out = await pipeline.checkPreconditions(h.preconditions, baseCtx(), {
       memberPermissions: new Set(['KickMembers']),
     });
     expect(out.ok).toBe(false);
@@ -79,7 +79,7 @@ describe('Pipeline.checkPreconditions', () => {
       run: () => ({ kind: 'message', content: 'ok' }),
     });
     const pipeline = new Pipeline();
-    const out = await pipeline.checkPreconditions(h, baseCtx({ authorId: 'stranger' }), {
+    const out = await pipeline.checkPreconditions(h.preconditions, baseCtx({ authorId: 'stranger' }), {
       owners: ['owner1'],
     });
     expect(out.ok).toBe(false);
@@ -95,11 +95,11 @@ describe('Pipeline.checkPreconditions', () => {
     const pipeline = new Pipeline();
     const now = Date.now();
     setSystemTime(new Date(now));
-    expect((await pipeline.checkPreconditions(h, baseCtx())).ok).toBe(true);
-    const second = await pipeline.checkPreconditions(h, baseCtx());
+    expect((await pipeline.checkPreconditions(h.preconditions, baseCtx())).ok).toBe(true);
+    const second = await pipeline.checkPreconditions(h.preconditions, baseCtx());
     expect(second.ok).toBe(false);
     setSystemTime(new Date(now + 61_000));
-    const third = await pipeline.checkPreconditions(h, baseCtx());
+    const third = await pipeline.checkPreconditions(h.preconditions, baseCtx());
     expect(third.ok).toBe(true);
     setSystemTime(new Date(now));
   });
@@ -112,7 +112,7 @@ describe('Pipeline.checkPreconditions', () => {
       run: () => ({ kind: 'message', content: 'ok' }),
     });
     const pipeline = new Pipeline();
-    const out = await pipeline.checkPreconditions(h, baseCtx());
+    const out = await pipeline.checkPreconditions(h.preconditions, baseCtx());
     expect(out.ok).toBe(false);
     expect(out.reason).toBe('заблокирован');
   });
@@ -127,7 +127,7 @@ describe('Pipeline.missingCapabilities', () => {
       run: () => ({ kind: 'message', content: 'ok' }),
     });
     const pipeline = new Pipeline();
-    const missing = pipeline.missingCapabilities(h, new Set(['SendMessages']));
+    const missing = pipeline.missingCapabilities(h.capabilities, new Set(['SendMessages']));
     expect(missing).toEqual(['EmbedLinks']);
   });
 });

@@ -105,9 +105,54 @@ capabilities: ['EmbedLinks', 'AttachFiles', 'AddReactions', 'ManageMessages', ..
 { kind: 'embed', embed: EmbedData, ephemeral?: boolean }
 { kind: 'attachment', file: { name: 'f.png', data: Uint8Array }, caption?: string, ephemeral?: boolean }
 { kind: 'multiple', results: Result[] }
+{ kind: 'component', content?: string, rows: ComponentRow[], ephemeral?: boolean }
+{ kind: 'update', result: …без kind=update… }
 ```
 
 `embed` — стандартная `EmbedData` discord.js (title, description, color, fields, image, footer...).
+
+`component` рендерит кнопки (см. ниже), `update` перезаписывает сообщение, к которому прикреплены кнопки (доставка через `interaction.update()`; из slash-команды деградирует до обычного ответа).
+
+## Кнопки (`components`) — кликабельные actions на Result
+
+Handler может рендерить кнопки и подписываться на их нажатия. Два шага:
+
+**1. Рендер кнопок** через `Result` kind `'component'`:
+
+```ts
+run: async ({ args, store, input }) => {
+  await store.set(`last:${input.author.id}`, args.dice);
+  return {
+    kind: 'component',
+    content: `🎲 ${args.dice} → бросок`,       // текст над кнопками
+    rows: [
+      { buttons: [{ id: 'reroll', label: '🎲 Ещё раз', style: 'primary' }] },
+    ],
+  };
+},
+```
+
+Кнопка (`ComponentButton`): `id`, `label`, `style` (`'primary' | 'secondary' | 'success' | 'danger' | 'link'`), `emoji`, `disabled`, а для link-кнопок — `url` вместо `id`. `id` может нести payload после двоеточия: `'step:1'` → компонент `step`, payload `'1'`. Ограничения Discord: до 5 кнопок в ряду, до 5 рядов на сообщение.
+
+**2. Объявление component-хэндлера** в `defineHandler`:
+
+```ts
+components: [
+  {
+    id: 'reroll',                // без ':', совпадает с префиксом id кнопки
+    description: 'Бросает ещё раз',
+    run: ({ store, input, customId, payload }) =>
+      ({
+        kind: 'update',          // перезаписывает сообщение кнопки
+        result: { kind: 'message', content: 'новый бросок' },
+      }),
+  },
+],
+```
+
+Ядро формирует `customId` кнопки как `<handler>:<id>`, для payload — `<handler>:<id>:<payload>`. Клик роутится в компонент с этим `id`; `ctx.payload` содержит часть после второго двоеточия. `ComponentRunContext` — тот же `HandlerRunContext` (есть `input`, `store`, `memory`, `logger`, `services`) плюс `customId` и `payload`.
+
+Живые примеры — `src/modules/roll` (кнопка «Ещё раз») и `src/modules/buttons` (счётчик с payload-кнопками `step:1`/`step:-1`/`reset`).
 
 ## Store
 
@@ -199,7 +244,9 @@ const result = await runHandler(handler, { args: { text: 'привет' } });
 - `createInput(overrides?)` — нормализованный `Input`;
 - `createContext(overrides?)` — `{ input, store, memory, logger }` (всё in-memory, ничего не пишет на диск);
 - `runHandler(handler, { input?, args? })` — прогон через реальный `Pipeline` (парсинг + дефолты + run);
-- `createFakeInteraction(overrides?)` — фейковое `ChatInputCommandInteraction` (для тестов адаптера, с кастом `as unknown as ...`).
+- `runComponent(handler, { id, customId? })` — прогон component-хэндлера кнопки (как при живом клике; customId строится автоматически);
+- `createFakeInteraction(overrides?)` — фейковое `ChatInputCommandInteraction` (для тестов адаптера, с кастом `as unknown as ...`);
+- `createFakeButtonInteraction(overrides?)` — фейковое нажатие кнопки (для тестов адаптера).
 
 ## Что модулям недоступно
 

@@ -51,8 +51,8 @@ describe('composeApp (offline-режим)', () => {
 
   test('/roll с дефолтом работает', async () => {
     const result = await app.interactor.handle(createInput({ commandName: 'roll' }), env);
-    expect(result).toMatchObject({ kind: 'message' });
-    if (result && result.kind === 'message') {
+    expect(result).toMatchObject({ kind: 'component' });
+    if (result && result.kind === 'component') {
       expect(result.content).toMatch(/^🎲 2d6 → \[.*\] = \*\*\d+\*\*$/);
     }
   });

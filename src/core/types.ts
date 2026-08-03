@@ -34,11 +34,36 @@ export interface Input {
   channel: ChannelRef;
 }
 
+/** Стиль кнопки (маппинг на discord.js ButtonStyle — в адаптере). */
+export type ButtonStyle = 'primary' | 'secondary' | 'success' | 'danger' | 'link';
+
+/**
+ * Кнопка в ActionRow Result-а kind='component'.
+ * `id` — идентификатор компонента (до первого ':') и произвольный payload после ':'
+ * (например `'step:1'` → компонент `step` с payload `'1'`). Для link-кнопок `url` обязателен.
+ */
+export interface ComponentButton {
+  id?: string;
+  label: string;
+  style?: ButtonStyle;
+  emoji?: string;
+  url?: string;
+  disabled?: boolean;
+}
+
+/** Один ряд кнопок (максимум 5 кнопок на ряд, 5 рядов на сообщение). */
+export interface ComponentRow {
+  buttons: ComponentButton[];
+}
+
 export type Result =
   | { kind: 'message'; content: string; ephemeral?: boolean }
   | { kind: 'embed'; embed: EmbedData; ephemeral?: boolean }
   | { kind: 'attachment'; file: { name: string; data: Uint8Array }; caption?: string; ephemeral?: boolean }
-  | { kind: 'multiple'; results: Result[] };
+  | { kind: 'multiple'; results: Result[] }
+  | { kind: 'component'; content?: string; rows: ComponentRow[]; ephemeral?: boolean }
+  /** Перезаписать сообщение, к которому прикреплены кнопки (только из component-хэндлера). */
+  | { kind: 'update'; result: Exclude<Result, { kind: 'update' }> };
 
 export interface PreconditionOutcome {
   ok: boolean;

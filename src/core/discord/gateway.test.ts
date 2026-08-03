@@ -13,7 +13,7 @@ function makeDeps(overrides: Partial<GatewayDeps> = {}): GatewayDeps {
   return {
     logger: silentLogger(),
     owners: [],
-    handler: { handle: async () => ({ kind: 'message', content: 'ок' }) },
+    handler: { handle: async () => ({ kind: 'message', content: 'ок' }), handleComponent: async () => undefined },
     onReady: async () => {},
     ...overrides,
   };
@@ -53,7 +53,7 @@ describe('createGateway', () => {
 
   test('interactionCreate диспатчит handler и отвечает', async () => {
     const handle = mock(async () => ({ kind: 'message' as const, content: 'плюс' }));
-    const gateway = createGateway(makeDeps({ handler: { handle } }));
+    const gateway = createGateway(makeDeps({ handler: { handle, handleComponent: async () => undefined } }));
     clients.push(gateway.client);
     const interaction = createFakeInteraction({ commandName: 'ping' });
 

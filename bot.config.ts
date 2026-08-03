@@ -7,6 +7,7 @@ export default {
     roll: { enabled: true },
     forecast: { enabled: true },
     anime: { enabled: true },
+    buttons: { enabled: true },
   },
   services: {
     shikimori: {
