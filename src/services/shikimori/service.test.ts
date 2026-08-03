@@ -159,4 +159,18 @@ describe('shikimori service', () => {
     expect(times).toHaveLength(2);
     expect(times[1]! - times[0]!).toBeGreaterThanOrEqual(100);
   });
+
+  test('троттлинг: параллельные вызовы не быстрее minRequestInterval', async () => {
+    const times: number[] = [];
+    mockFetch(async () => {
+      times.push(performance.now());
+      return okJson({ animes: [animeRaw] });
+    });
+    const api = initApi({ minRequestInterval: 100 });
+    const [a, b] = await Promise.all([api.search('a'), api.search('b')]);
+    expect(a).toHaveLength(1);
+    expect(b).toHaveLength(1);
+    expect(times).toHaveLength(2);
+    expect(times[1]! - times[0]!).toBeGreaterThanOrEqual(100);
+  });
 });

@@ -106,12 +106,13 @@ export default defineModule({
         query: arg.string('Название аниме'),
         limit: arg.integer('Сколько показать (1–10)').optional(),
       },
-      run: async ({ services, args }) => {
+      run: async ({ services, args, logger }) => {
         try {
           const results = await services.shikimori.search(args.query, clampLimit(args.limit));
           if (results.length === 0) return { kind: 'message', content: `Ничего не найдено по запросу «${args.query}».` };
           return renderList(results, `Поиск: ${args.query}`);
-        } catch {
+        } catch (error) {
+          logger.warn('anime: ошибка Shikimori', error as Record<string, unknown>);
           return { kind: 'message', content: 'Не удалось получить данные от Shikimori. Попробуйте позже.' };
         }
       },
@@ -122,12 +123,13 @@ export default defineModule({
       args: {
         limit: arg.integer('Сколько показать (1–10)').optional(),
       },
-      run: async ({ services, args }) => {
+      run: async ({ services, args, logger }) => {
         try {
           const results = await services.shikimori.top(clampLimit(args.limit));
           if (results.length === 0) return { kind: 'message', content: 'Топ пуст.' };
           return renderList(results, 'Топ аниме по рейтингу');
-        } catch {
+        } catch (error) {
+          logger.warn('anime: ошибка Shikimori', error as Record<string, unknown>);
           return { kind: 'message', content: 'Не удалось получить данные от Shikimori. Попробуйте позже.' };
         }
       },
@@ -138,7 +140,7 @@ export default defineModule({
       args: {
         target: arg.string('ID или название аниме'),
       },
-      run: async ({ services, args }) => {
+      run: async ({ services, args, logger }) => {
         try {
           const isId = /^\d+$/.test(args.target);
           let item: AnimeDetailsLike | null = null;
@@ -151,7 +153,8 @@ export default defineModule({
           }
           if (!item) return { kind: 'message', content: 'Аниме не найдено.' };
           return renderInfo(item);
-        } catch {
+        } catch (error) {
+          logger.warn('anime: ошибка Shikimori', error as Record<string, unknown>);
           return { kind: 'message', content: 'Не удалось получить данные от Shikimori. Попробуйте позже.' };
         }
       },

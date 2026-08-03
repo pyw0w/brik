@@ -126,37 +126,43 @@ export default defineService<{
   init: ({ options, logger }) => {
     const endpoint = options.endpoint ?? 'https://shikimori.io/api/graphql';
     const interval = options.minRequestInterval ?? 200;
-    let lastRequestAt = 0;
+    let nextAllowedAt = 0;
+    let lastRequest: Promise<unknown> = Promise.resolve();
 
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
     async function request<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-      const now = Date.now();
-      const wait = Math.max(0, lastRequestAt + interval - now);
-      if (wait > 0) await sleep(wait);
-      lastRequestAt = Date.now();
+      const run = lastRequest.then(async () => {
+        const now = performance.now();
+        const wait = Math.max(0, nextAllowedAt - now);
+        if (wait > 0) await sleep(Math.ceil(wait));
+        nextAllowedAt = performance.now() + interval;
 
-      let res: Response;
-      try {
-        res = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': options.userAgent,
-          },
-          body: JSON.stringify({ query, variables }),
-        });
-      } catch {
-        throw new ShikimoriError('Не удалось связаться с Shikimori');
-      }
+        let res: Response;
+        try {
+          res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent': options.userAgent,
+            },
+            body: JSON.stringify({ query, variables }),
+          });
+        } catch {
+          throw new ShikimoriError('Не удалось связаться с Shikimori');
+        }
+        nextAllowedAt = Math.max(nextAllowedAt, performance.now() + interval);
 
-      if (!res.ok) throw new ShikimoriError(`Shikimori: HTTP ${res.status}`);
+        if (!res.ok) throw new ShikimoriError(`Shikimori: HTTP ${res.status}`);
 
-      const json = (await res.json()) as GraphqlEnvelope;
-      if (json.errors && json.errors.length > 0) {
-        throw new ShikimoriError(`Shikimori: ${json.errors[0]!.message}`);
-      }
-      return json.data as T;
+        const json = (await res.json()) as GraphqlEnvelope;
+        if (json.errors && json.errors.length > 0) {
+          throw new ShikimoriError(`Shikimori: ${json.errors[0]!.message}`);
+        }
+        return json.data as T;
+      });
+      lastRequest = run.catch(() => {});
+      return run;
     }
 
     const mapSummary = (raw: AnimeRaw): AnimeSummary => ({
