@@ -10,6 +10,8 @@ export interface BotConfig {
   token?: string;
   /** Ключи — имена модулей; решения Enable. */
   modules: Record<string, ModuleEntry>;
+  /** Опции и включение сервисов (services.<name>.options). */
+  services?: Record<string, ModuleEntry>;
   /** ID пользователей-владельцев (для предусловия ownerOnly). */
   owners?: string[];
   /** Гильда для мгновенной регистрации команд в dev-режиме. */

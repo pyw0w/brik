@@ -1,5 +1,5 @@
 import { describe, expect, setSystemTime, test } from 'bun:test';
-import { arg, defineHandler } from './index.ts';
+import { arg, defineHandler, type ServiceMap } from './index.ts';
 import { createLogger } from './internal/logger.ts';
 import { Pipeline } from './internal/pipeline.ts';
 import { InMemoryChannelMemory, MemoryStore } from './internal/store.ts';
@@ -17,6 +17,7 @@ function baseCtx(overrides: { dm?: boolean; authorId?: string } = {}) {
     store: new MemoryStore(),
     memory: new InMemoryChannelMemory(),
     logger: createLogger('test', 'error'),
+    services: {} as ServiceMap,
   };
 }
 

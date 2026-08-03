@@ -1,4 +1,5 @@
 import type { ArgsOf, ArgsSchema } from './args.ts';
+import type { ServiceMap } from './service.ts';
 import type { Capability, PreconditionSpec, Result } from './types.ts';
 
 export interface HandlerRunContext {
@@ -6,6 +7,7 @@ export interface HandlerRunContext {
   store: import('./types.ts').Store;
   memory: import('./types.ts').ChannelMemory;
   logger: import('./types.ts').Logger;
+  services: ServiceMap;
 }
 
 export interface HandlerDef<A extends ArgsSchema = ArgsSchema> {

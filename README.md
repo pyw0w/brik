@@ -43,6 +43,7 @@ src/
 │   ├── discord/        #   адаптер: единственное место runtime-discord.js
 │   └── *.test.ts       #   тесты ядра рядом с кодом
 └── modules/            # модули: help, ping, roll, ... (ваши) — каждый с тестом
+├── services/           # сервисы: weather, ... (defineService)
 ├── scripts/            # create-module, deploy-commands, check-boundaries
 ├── docs/               # документация (гайды + ADR)
 ├── bot.config.ts       # включение/опции модулей
@@ -64,6 +65,13 @@ src/
 ```bash
 bun run create:module economy
 # → src/modules/economy/module.ts + module.test.ts
+```
+
+Внешние зависимости (API-клиенты, соединения) — сервисы:
+
+```bash
+bun run create:service weather
+# → src/services/weather/service.ts
 ```
 
 Дальше — [гайд «Первый модуль»](docs/guides/your-first-module.md) и [CONTRIBUTING.md](CONTRIBUTING.md).

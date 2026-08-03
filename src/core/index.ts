@@ -6,6 +6,9 @@ export type { ArgSpec, ArgOptionType, ArgsOf, ArgsSchema } from './args.ts';
 export { defineHandler } from './handler.ts';
 export type { Handler, HandlerDef, HandlerRunContext } from './handler.ts';
 
+export { defineService } from './service.ts';
+export type { Service, ServiceDef, ServiceInitContext, ServiceMap } from './service.ts';
+
 export { defineModule } from './module.ts';
 export type {
   Module,

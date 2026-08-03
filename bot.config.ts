@@ -5,6 +5,7 @@ export default {
     help: { enabled: true },
     ping: { enabled: true },
     roll: { enabled: true },
+    forecast: { enabled: true },
   },
   owners: [],
 } satisfies BotConfig;

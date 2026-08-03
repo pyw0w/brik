@@ -2,8 +2,10 @@ import { createGateway } from '../core/discord/gateway.ts';
 import { createLogger } from '../core/internal/logger.ts';
 import { Pipeline } from '../core/internal/pipeline.ts';
 import { Registry } from '../core/internal/registry.ts';
+import { ServiceRegistry } from '../core/internal/service-registry.ts';
 import { FileStore, InMemoryChannelMemory } from '../core/internal/store.ts';
 import type { Logger } from '../core/types.ts';
+import type { ServiceMap } from '../core/service.ts';
 import { InteractionInteractor } from './interactor.ts';
 import { Lifecycle } from './lifecycle.ts';
 import type { BotConfig } from '../core/internal/config.ts';
@@ -18,6 +20,7 @@ export interface AppContext {
 export interface ComposeOptions {
   modulesDir?: string;
   dataDir?: string;
+  servicesDir?: string;
   /** false — не подключаться к Discord и не логиниться (офлайн/тесты). */
   syncSlashCommands?: boolean;
   logger?: Logger;
@@ -33,6 +36,8 @@ export function composeApp(config: BotConfig, options: ComposeOptions = {}): App
   const pipeline = new Pipeline();
   const memory = new InMemoryChannelMemory();
   const stores = new Map<string, FileStore>();
+  const services = new Map<string, unknown>();
+  const serviceRegistry = new ServiceRegistry();
 
   const interactor = new InteractionInteractor({
     registry,
@@ -40,6 +45,7 @@ export function composeApp(config: BotConfig, options: ComposeOptions = {}): App
     memory,
     logger,
     storeFor: (moduleName) => stores.get(moduleName),
+    servicesFor: () => Object.fromEntries(services) as unknown as ServiceMap,
   });
 
   const lifecycle = new Lifecycle({
@@ -49,8 +55,11 @@ export function composeApp(config: BotConfig, options: ComposeOptions = {}): App
     logger,
     config,
     modulesDir: options.modulesDir ?? 'src/modules',
+    servicesDir: options.servicesDir ?? 'src/services',
     dataDir: options.dataDir ?? '.data',
     stores,
+    serviceRegistry,
+    services,
     gatewayFactory: options.syncSlashCommands === false
       ? undefined
       : (onReady) => createGateway({

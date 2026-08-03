@@ -18,6 +18,7 @@ const moduleTemplate = `import { arg, defineHandler, defineModule } from '../../
 export default defineModule({
   name: '${name}',
   description: 'Что делает этот модуль',
+  // services: ['my-service'],  // сервис из src/services/, доступен в ctx.services
   handlers: [
     defineHandler({
       name: '${name}',

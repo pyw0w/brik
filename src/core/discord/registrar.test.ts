@@ -1,7 +1,9 @@
-import { describe, expect, test } from 'bun:test';
-import { ApplicationCommandOptionType } from 'discord.js';
+import { describe, expect, mock, test } from 'bun:test';
+import { ApplicationCommandOptionType, type Client } from 'discord.js';
 import { arg, defineHandler } from '../index.ts';
-import { toSlashCommand } from './registrar.ts';
+import { syncCommands, toSlashCommand } from './registrar.ts';
+
+const logger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 
 describe('toSlashCommand', () => {
   test('имя и описание', () => {
@@ -71,5 +73,46 @@ describe('toSlashCommand', () => {
       }),
     ).toJSON();
     expect((json.options ?? [])[0]?.required).toBe(false);
+  });
+});
+
+describe('syncCommands', () => {
+  function fakeClient(guildsFetch: unknown, appSet = mock(async () => {})): Client {
+    return {
+      application: { commands: { set: appSet } },
+      guilds: { fetch: guildsFetch },
+    } as unknown as Client;
+  }
+
+  test('гильда dev не найдена — понятная ошибка вместо Unknown Guild', async () => {
+    const client = fakeClient(async () => {
+      throw { code: 10004, message: 'Unknown Guild' };
+    });
+    await expect(syncCommands(client, [], '123', logger)).rejects.toThrow(
+      /Гильда 123 не найдена/,
+    );
+  });
+
+  test('ошибка без кода 10004 пробрасывается как есть', async () => {
+    const client = fakeClient(async () => {
+      throw new Error('boom');
+    });
+    await expect(syncCommands(client, [], '123', logger)).rejects.toThrow('boom');
+  });
+
+  test('dev-гильда: команды регистрируются на гильду', async () => {
+    const set = mock(async () => {});
+    const client = fakeClient(async () => ({ commands: { set } }));
+    await syncCommands(client, [], '123', logger);
+    expect(set).toHaveBeenCalledWith([]);
+  });
+
+  test('без dev-гильды: команды регистрируются глобально', async () => {
+    const appSet = mock(async () => {});
+    const client = fakeClient(() => {
+      throw new Error('не должен зваться');
+    }, appSet);
+    await syncCommands(client, [], undefined, logger);
+    expect(appSet).toHaveBeenCalledWith([]);
   });
 });

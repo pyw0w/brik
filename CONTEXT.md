@@ -36,6 +36,10 @@ _Avoid_: guard, middleware, permission check
 Персистентное KV-хранилище, предоставляемое ядром, неймспейсированное по модулю; также диалоговая память по каналу для многошаговых сценариев. Остальные данные (внешние БД, API) модуль держит сам.
 _Avoid_: database, memory, cache
 
+**Service**:
+Именованная глобальная зависимость модуля (API-клиент, соединение), живёт в `src/services/<name>/service.ts`, объявлена через `defineService`, расширяет `ServiceMap`; модуль получает её типизированно в `ctx.services`.
+_Avoid_: plugin, connector, third-party
+
 **Registry**:
 Реестр обнаруженных модулей и Handler-ов (авто-дискавери по конвенции); источник истины о том, что доступно для включения.
 _Avoid_: index, collection
