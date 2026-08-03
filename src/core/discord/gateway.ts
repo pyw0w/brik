@@ -29,7 +29,7 @@ export function createGateway(deps: GatewayDeps): Gateway {
     });
   });
 
-  client.on('ready', () => {
+  client.on('clientReady', () => {
     deps.logger.info(`Подключено как ${client.user?.tag ?? '?'}`);
     void deps.onReady(client);
   });

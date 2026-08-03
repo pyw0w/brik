@@ -30,7 +30,7 @@ describe('createGateway', () => {
     const gateway = createGateway(makeDeps({ logger, onReady }));
     clients.push(gateway.client);
 
-    gateway.client.emit('ready' as never);
+    gateway.client.emit('clientReady' as never);
 
     expect(onReady).toHaveBeenCalledTimes(1);
     expect(onReady).toHaveBeenCalledWith(gateway.client);
@@ -46,7 +46,7 @@ describe('createGateway', () => {
       configurable: true,
     });
 
-    gateway.client.emit('ready' as never);
+    gateway.client.emit('clientReady' as never);
 
     expect(logger.info).toHaveBeenCalledWith('Подключено как Бот#1234');
   });
