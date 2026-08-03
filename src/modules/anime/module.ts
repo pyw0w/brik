@@ -112,7 +112,7 @@ export default defineModule({
           if (results.length === 0) return { kind: 'message', content: `Ничего не найдено по запросу «${args.query}».` };
           return renderList(results, `Поиск: ${args.query}`);
         } catch (error) {
-          logger.warn('anime: ошибка Shikimori', error as Record<string, unknown>);
+          logger.error('anime: ошибка Shikimori', error);
           return { kind: 'message', content: 'Не удалось получить данные от Shikimori. Попробуйте позже.' };
         }
       },
@@ -129,7 +129,7 @@ export default defineModule({
           if (results.length === 0) return { kind: 'message', content: 'Топ пуст.' };
           return renderList(results, 'Топ аниме по рейтингу');
         } catch (error) {
-          logger.warn('anime: ошибка Shikimori', error as Record<string, unknown>);
+          logger.error('anime: ошибка Shikimori', error);
           return { kind: 'message', content: 'Не удалось получить данные от Shikimori. Попробуйте позже.' };
         }
       },
@@ -154,7 +154,7 @@ export default defineModule({
           if (!item) return { kind: 'message', content: 'Аниме не найдено.' };
           return renderInfo(item);
         } catch (error) {
-          logger.warn('anime: ошибка Shikimori', error as Record<string, unknown>);
+          logger.error('anime: ошибка Shikimori', error);
           return { kind: 'message', content: 'Не удалось получить данные от Shikimori. Попробуйте позже.' };
         }
       },

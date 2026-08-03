@@ -133,9 +133,7 @@ export default defineService<{
 
     async function request<T>(query: string, variables: Record<string, unknown>): Promise<T> {
       const run = lastRequest.then(async () => {
-        const now = performance.now();
-        const wait = Math.max(0, nextAllowedAt - now);
-        if (wait > 0) await sleep(Math.ceil(wait));
+        while (performance.now() < nextAllowedAt) await sleep(Math.ceil(nextAllowedAt - performance.now()));
         nextAllowedAt = performance.now() + interval;
 
         let res: Response;
