@@ -97,6 +97,7 @@ describe('shikimori service', () => {
         score: 9.1,
         episodes: 28,
         url: 'https://shikimori.one/animes/52991-sousou-no-frieren',
+        airedOn: '2023-09-29',
         poster: { mainUrl: 'https://i.imgur.com/main.jpg', previewUrl: 'https://i.imgur.com/preview.jpg' },
       },
     ]);
@@ -116,6 +117,7 @@ describe('shikimori service', () => {
       score: null,
       episodes: 0,
       url: 'https://shikimori.one/animes/1-x',
+      airedOn: null,
       poster: null,
     });
   });
@@ -208,6 +210,7 @@ export interface AnimeSummary {
   score: number | null;
   episodes: number;
   url: string;
+  airedOn: string | null;
   poster: { mainUrl: string; previewUrl: string } | null;
 }
 
@@ -240,6 +243,7 @@ const SUMMARY_FIELDS = `
   score
   episodes
   url
+  aired_on
   poster {
     main_url
     preview_url
@@ -287,6 +291,7 @@ interface AnimeRaw {
   score?: number | null;
   episodes?: number | null;
   url?: string;
+  aired_on?: string | null;
   poster?: { main_url?: string; preview_url?: string } | null;
   aired_on?: string | null;
   duration?: number | null;
@@ -357,6 +362,7 @@ export default defineService<{
       score: raw.score ?? null,
       episodes: raw.episodes ?? 0,
       url: raw.url ?? '',
+      airedOn: raw.aired_on ?? null,
       poster: raw.poster?.main_url ? { mainUrl: raw.poster.main_url, previewUrl: raw.poster.preview_url ?? raw.poster.main_url } : null,
     });
 
@@ -424,9 +430,8 @@ Create `src/modules/anime/module.test.ts`:
 import { describe, expect, test } from 'bun:test';
 import { runHandler } from '../../core/testing.ts';
 import module from './module.ts';
-import type { AnimeSummary, ShikimoriApi } from '../../services/shikimori/service.ts';
 
-const summary = (over: Partial<AnimeSummary> = {}): AnimeSummary => ({
+const summary = (over: Record<string, unknown> = {}) => ({
   id: 52991,
   name: 'Sousou no Frieren',
   russian: 'Фрирен',
@@ -435,30 +440,30 @@ const summary = (over: Partial<AnimeSummary> = {}): AnimeSummary => ({
   score: 9.1,
   episodes: 28,
   url: 'https://shikimori.one/animes/52991',
+  airedOn: '2023-09-29',
   poster: null,
   ...over,
-});
-
-const makeServices = (over: Partial<ShikimoriApi> = {}): { shikimori: ShikimoriApi } => ({
-  shikimori: {
-    search: async () => [],
-    top: async () => [],
-    animeById: async () => null,
-    ...over,
-  },
 });
 
 const findHandler = (name: string) => module.handlers.find((h) => h.name === name)!;
 
 describe('модуль anime', () => {
   test('search возвращает список результатов', async () => {
-    const services = makeServices({ search: async () => [summary(), summary({ id: 2, name: 'Naruto', russian: null, score: 8.5 })] });
+    const services = {
+      shikimori: {
+        search: async () => [summary(), summary({ id: 2, name: 'Naruto', russian: null, score: 8.5 })],
+        top: async () => [],
+        animeById: async () => null,
+      },
+    };
     const result = await runHandler(findHandler('search'), { args: { query: 'фрирен', limit: 2 }, services });
     expect(result.kind).toBe('embed');
   });
 
   test('search с пустым результатом пишет «Ничего не найдено»', async () => {
-    const services = makeServices();
+    const services = {
+      shikimori: { search: async () => [], top: async () => [], animeById: async () => null },
+    };
     const result = await runHandler(findHandler('search'), { args: { query: 'zzz' }, services });
     expect(result.kind).toBe('message');
     if (result.kind === 'message') expect(result.content).toContain('Ничего не найдено');
@@ -466,30 +471,48 @@ describe('модуль anime', () => {
 
   test('search дефолтный limit = 5', async () => {
     let requestedLimit: number | undefined;
-    const services = makeServices({
-      search: async (_q, limit) => {
-        requestedLimit = limit;
-        return [summary()];
+    const services = {
+      shikimori: {
+        search: async (_q: string, limit?: number) => {
+          requestedLimit = limit;
+          return [summary()];
+        },
+        top: async () => [],
+        animeById: async () => null,
       },
-    });
+    };
     await runHandler(findHandler('search'), { args: { query: 'x' }, services });
     expect(requestedLimit).toBe(5);
   });
 
   test('top возвращает список', async () => {
-    const services = makeServices({ top: async () => [summary(), summary({ id: 3, name: 'AoT', russian: 'Атака титанов' })] });
+    const services = {
+      shikimori: {
+        search: async () => [],
+        top: async () => [summary(), summary({ id: 3, name: 'AoT', russian: 'Атака титанов' })],
+        animeById: async () => null,
+      },
+    };
     const result = await runHandler(findHandler('top'), { args: { limit: 2 }, services });
     expect(result.kind).toBe('embed');
   });
 
   test('ошибка сервиса → дружелюбный текст', async () => {
-    const services = makeServices({ search: async () => { throw new Error('boom'); } });
+    const services = {
+      shikimori: {
+        search: async () => { throw new Error('boom'); },
+        top: async () => [],
+        animeById: async () => null,
+      },
+    };
     const result = await runHandler(findHandler('search'), { args: { query: 'x' }, services });
     expect(result.kind).toBe('message');
     if (result.kind === 'message') expect(result.content).toContain('Не удалось получить данные от Shikimori');
   });
 });
 ```
+
+Примечание: тесты не импортируют типы из сервиса (правило границ). `services.shikimori` типизируется контекстно через `runHandler` (ServiceMap из аугментации Task 1).
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -498,33 +521,29 @@ Expected: FAIL — «Cannot find module './module.ts'».
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `src/modules/anime/module.ts`:
-
-```ts
-import { arg, defineHandler, defineModule } from '../../core/index.ts';
-import type { AnimeSummary } from '../../services/shikimori/service.ts';
-```
-
-**Остановитесь здесь.** Модуль **не может** импортировать `../../services/shikimori/service.ts` — это нарушение границ (`check:boundaries` пропускает только `../../core/*`). Типизация `ctx.services.shikimori` приходит из аугментации `ServiceMap`, поэтому импорт типов из сервиса не нужен.
-
-Вместо этого напишите модуль так:
+Create `src/modules/anime/module.ts`. **Важно: модуль НЕ импортирует сервис** (правило границ: только `../../core/index.ts`). Типизация `services.shikimori` приходит из аугментации `ServiceMap` (Task 1) автоматически.
 
 ```ts
 import { arg, defineHandler, defineModule } from '../../core/index.ts';
 
 const clampLimit = (n: number | undefined): number => Math.max(1, Math.min(Math.trunc(n ?? 5), 10));
 
-const formatYear = (airedOn: string | null): string => (airedOn ? ` ${airedOn.slice(0, 4)}` : '');
+interface ListItem {
+  russian: string | null;
+  name: string;
+  score: number | null;
+  airedOn: string | null;
+}
 
-const formatSummaryLine = (item: { russian: string | null; name: string; score: number | null; airedOn: string | null }, i: number): string => {
+const formatSummaryLine = (item: ListItem, i: number): string => {
   const title = item.russian ?? item.name;
   const meta = [item.score !== null ? `оценка ${item.score}` : null, item.airedOn ? item.airedOn.slice(0, 4) : null]
     .filter(Boolean)
     .join(' · ');
-  return `${i}. **${title}**${meta ? ` — ${meta}` : ''}`;
+  return `${i + 1}. **${title}**${meta ? ` — ${meta}` : ''}`;
 };
 
-const renderList = (items: Array<{ russian: string | null; name: string; score: number | null; airedOn: string | null }>, title: string) => ({
+const renderList = (items: ListItem[], title: string) => ({
   kind: 'embed' as const,
   embed: {
     title,
@@ -575,7 +594,7 @@ export default defineModule({
 });
 ```
 
-**Замечание:** `services.shikimori` типизируется как `ShikimoriApi` через аугментацию `ServiceMap` (Task 1), поэтому `results` — `AnimeSummary[]` с полями `russian`, `name`, `score`, `airedOn`. Импорт `type { AnimeSummary }` из сервиса в шапке выше — это только подсказка; в реальном файле его быть не должно (нарушение границ). Проверьте: в финальном файле НЕ должно быть `import ... from '../../services/shikimori/service.ts'`.
+Примечание: `services.shikimori` типизируется как `ShikimoriApi` через аугментацию `ServiceMap` (Task 1), поэтому `results` — `AnimeSummary[]` с полями `russian`, `name`, `score`, `airedOn`, которые структурно совместимы с `ListItem`. В файле НЕ должно быть `import ... from '../../services/shikimori/service.ts'`.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -625,24 +644,39 @@ const details = {
 
 describe('команда info', () => {
   test('по id вызывает animeById', async () => {
-    const services = makeServices({ animeById: async () => details });
+    const services = {
+      shikimori: {
+        search: async () => [],
+        top: async () => [],
+        animeById: async () => details,
+      },
+    };
     const result = await runHandler(findHandler('info'), { args: { target: '52991' }, services });
     expect(result.kind).toBe('embed');
   });
 
-  test('по названию ищет и берёт первый результат', async () => {
-    const services = makeServices({
-      search: async (q) => {
-        expect(q).toBe('Фрирен');
-        return [details];
+  test('по названию ищет id, затем берёт полную карточку', async () => {
+    const services = {
+      shikimori: {
+        search: async (q: string) => {
+          expect(q).toBe('Фрирен');
+          return [{ id: 52991, name: 'Sousou no Frieren', russian: 'Фрирен', kind: 'tv', status: 'released', score: 9.1, episodes: 28, url: 'https://shikimori.one/animes/52991', airedOn: '2023-09-29', poster: null }];
+        },
+        top: async () => [],
+        animeById: async (id: number) => {
+          expect(id).toBe(52991);
+          return details;
+        },
       },
-    });
+    };
     const result = await runHandler(findHandler('info'), { args: { target: 'Фрирен' }, services });
     expect(result.kind).toBe('embed');
   });
 
   test('не найдено → «Аниме не найдено»', async () => {
-    const services = makeServices();
+    const services = {
+      shikimori: { search: async () => [], top: async () => [], animeById: async () => null },
+    };
     const result = await runHandler(findHandler('info'), { args: { target: 'zzz' }, services });
     expect(result.kind).toBe('message');
     if (result.kind === 'message') expect(result.content).toBe('Аниме не найдено.');
@@ -747,7 +781,8 @@ defineHandler({
         item = await services.shikimori.animeById(Number(args.target));
       } else {
         const results = await services.shikimori.search(args.target, 1);
-        item = results[0] ?? null;
+        const found = results[0];
+        item = found ? await services.shikimori.animeById(found.id) : null;
       }
       if (!item) return { kind: 'message', content: 'Аниме не найдено.' };
       return renderInfo(item);
@@ -755,7 +790,6 @@ defineHandler({
       return { kind: 'message', content: 'Не удалось получить данные от Shikimori. Попробуйте позже.' };
     }
   },
-}),
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -901,7 +935,8 @@ Expected: PASS.
 **Placeholder scan:** нет TBD/TODO; каждый код-шаг содержит полный код. Единственное замечание — Task 2 шаг 3 содержит «стоп» с объяснением границ, это намеренная защита, а не плейсхолдер.
 
 **Type consistency:**
-- `AnimeSummary` (Task 1) → используется в `renderList` (Task 2), поля `russian/name/score/airedOn` совпадают.
+- `AnimeSummary` (Task 1) — содержит `airedOn`, используется в `renderList` (Task 2), поля `russian/name/score/airedOn` совпадают.
 - `AnimeDetailsLike` (Task 3) — локальный структурный тип в модуле, совместим с `AnimeDetails` из сервиса (поля совпадают).
-- `renderInfo` принимает `AnimeDetailsLike`, `services.shikimori.animeById` возвращает `AnimeDetails | null` — структурно совместимо.
+- `renderInfo` принимает `AnimeDetailsLike`; в info по названию `search(1)` возвращает `AnimeSummary` (без genres), поэтому модуль дополнительно вызывает `animeById(found.id)` — карточка всегда получает `AnimeDetails`.
 - `clampLimit` в сервисе (max 10) и в модуле (max 10) — согласованы.
+- Границы: модуль и его тесты не импортируют `../../services/shikimori/service.ts`; типы приходят через аугментацию `ServiceMap` и контекстную типизацию `runHandler`.

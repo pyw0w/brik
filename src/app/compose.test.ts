@@ -8,7 +8,12 @@ import { createInput } from '../core/testing.ts';
 import { composeApp, type AppContext } from './compose.ts';
 
 const config = {
-  modules: { help: { enabled: true }, ping: { enabled: true }, roll: { enabled: true } },
+  modules: {
+    help: { enabled: true },
+    ping: { enabled: true },
+    roll: { enabled: true },
+    anime: { enabled: false },
+  },
   owners: [],
 };
 
