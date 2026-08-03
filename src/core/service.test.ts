@@ -22,7 +22,7 @@ describe('defineService', () => {
   });
 
   test('ServiceMap пуст без сервисов', () => {
-    const map: ServiceMap = {};
+    const map: ServiceMap = {} as ServiceMap;
     expect(Object.keys(map)).toEqual([]);
   });
 });

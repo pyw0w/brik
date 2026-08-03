@@ -4,7 +4,7 @@ import { defineHandler, type ServiceMap } from './index.ts';
 
 describe('testing helpers и services', () => {
   test('createContext даёт пустой services', () => {
-    expect(createContext().services).toEqual({});
+    expect(createContext().services).toEqual({} as unknown as ServiceMap);
   });
 
   test('runHandler пробрасывает services в run', async () => {

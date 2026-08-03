@@ -7,7 +7,7 @@ export interface WeatherApi {
 
 declare module '../../core/index.ts' {
   interface ServiceMap {
-    weather?: WeatherApi;
+    weather: WeatherApi;
   }
 }
 

@@ -45,7 +45,7 @@ export function composeApp(config: BotConfig, options: ComposeOptions = {}): App
     memory,
     logger,
     storeFor: (moduleName) => stores.get(moduleName),
-    servicesFor: () => Object.fromEntries(services) as ServiceMap,
+    servicesFor: () => Object.fromEntries(services) as unknown as ServiceMap,
   });
 
   const lifecycle = new Lifecycle({

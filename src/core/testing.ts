@@ -31,7 +31,7 @@ export function createContext(overrides: Partial<TestContext> = {}): TestContext
     store: new MemoryStore(),
     memory: new InMemoryChannelMemory(),
     logger: createLogger('test', 'error'),
-    services: {},
+    services: {} as ServiceMap,
     ...overrides,
   };
 }

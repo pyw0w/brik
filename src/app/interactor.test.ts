@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { InteractionEnv } from '../core/discord/adapter.ts';
-import { arg, defineHandler, defineModule } from '../core/index.ts';
+import { arg, defineHandler, defineModule, type ServiceMap } from '../core/index.ts';
 import { createLogger } from '../core/internal/logger.ts';
 import { Pipeline } from '../core/internal/pipeline.ts';
 import { Registry } from '../core/internal/registry.ts';
@@ -34,7 +34,7 @@ function makeInteractor() {
     memory: new InMemoryChannelMemory(),
     logger,
     storeFor: (name) => stores.get(name),
-    servicesFor: () => ({}),
+    servicesFor: () => ({}) as ServiceMap,
   });
   return interactor;
 }
@@ -102,7 +102,7 @@ describe('InteractionInteractor', () => {
       memory: new InMemoryChannelMemory(),
       logger,
       storeFor: (name) => stores.get(name),
-    servicesFor: () => ({}),
+    servicesFor: () => ({}) as ServiceMap,
     });
     const result = await interactor.handle(createInput({ commandName: 'boom' }), fullGrant);
     expect(result).toMatchObject({ kind: 'message', ephemeral: true });
@@ -123,7 +123,7 @@ describe('InteractionInteractor', () => {
       memory: new InMemoryChannelMemory(),
       logger,
       storeFor: () => undefined,
-      servicesFor: () => ({}),
+      servicesFor: () => ({}) as ServiceMap,
     });
     const result = await interactor.handle(createInput({ commandName: 'nostore' }), fullGrant);
     expect(result).toBeUndefined();

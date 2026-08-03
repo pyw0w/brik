@@ -12,7 +12,7 @@ export default defineModule({
         city: arg.string('Город').default('Москва'),
       },
       run: async ({ services, args }) => {
-        const text = await services.weather!.now(args.city);
+        const text = await services.weather.now(args.city);
         return { kind: 'message', content: text };
       },
     }),

@@ -150,7 +150,7 @@ export class Lifecycle {
   }
 
   private servicesMap(): ServiceMap {
-    return Object.fromEntries(this.deps.services) as ServiceMap;
+    return Object.fromEntries(this.deps.services) as unknown as ServiceMap;
   }
 
   private async initServices(): Promise<void> {
