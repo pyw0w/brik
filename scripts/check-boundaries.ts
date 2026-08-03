@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -8,6 +8,7 @@ import { join } from 'node:path';
  */
 
 const MODULES_DIR = 'src/modules';
+const SERVICES_DIR = 'src/services';
 const ALLOWED_CORE = new Set([
   '../../core/index.ts',
   '../../core/index.js',
@@ -16,6 +17,7 @@ const ALLOWED_CORE = new Set([
 ]);
 
 function walk(dir: string): string[] {
+  if (!existsSync(dir)) return [];
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
@@ -38,24 +40,28 @@ function importsOf(file: string): string[] {
 }
 
 const failures: string[] = [];
+const ROOTS = [MODULES_DIR, SERVICES_DIR];
 
-for (const file of walk(MODULES_DIR)) {
-  for (const spec of importsOf(file)) {
-    if (spec.includes('discord.js')) {
-      failures.push(`${file}: запрещён прямой импорт discord.js («${spec}»); используйте только core/index.ts`);
-    }
-    if (spec.startsWith('../../core/') && ![...ALLOWED_CORE].some((a) => spec === a)) {
-      failures.push(
-        `${file}: импорт вне публичного контракта («${spec}»); разрешены только core/index.ts и core/testing.ts`,
-      );
+for (const root of ROOTS) {
+  for (const file of walk(root)) {
+    for (const spec of importsOf(file)) {
+      if (spec.includes('discord.js')) {
+        failures.push(`${file}: запрещён прямой импорт discord.js («${spec}»); используйте только core/index.ts`);
+      }
+      if (spec.startsWith('../../core/') && ![...ALLOWED_CORE].some((a) => spec === a)) {
+        failures.push(
+          `${file}: импорт вне публичного контракта («${spec}»); разрешены только core/index.ts и core/testing.ts`,
+        );
+      }
     }
   }
 }
 
 if (failures.length > 0) {
-  console.error('Нарушение границ модулей:');
+  console.error('Нарушение границ:');
   for (const f of failures) console.error(`  - ${f}`);
   process.exit(1);
 }
 
-console.log(`Границы ок: ${walk(MODULES_DIR).length} файлов модулей, все импорты в рамках контракта.`);
+const total = walk(MODULES_DIR).length + walk(SERVICES_DIR).length;
+console.log(`Границы ок: ${total} файлов модулей и сервисов, все импорты в рамках контракта.`);
