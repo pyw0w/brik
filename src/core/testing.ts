@@ -2,6 +2,7 @@ import type { Handler } from './handler.ts';
 import { createLogger } from './internal/logger.ts';
 import { Pipeline } from './internal/pipeline.ts';
 import { InMemoryChannelMemory, MemoryStore } from './internal/store.ts';
+import type { ServiceMap } from './service.ts';
 import type { Input, Result } from './types.ts';
 
 export interface TestContext {
@@ -9,6 +10,7 @@ export interface TestContext {
   store: MemoryStore;
   memory: InMemoryChannelMemory;
   logger: ReturnType<typeof createLogger>;
+  services: ServiceMap;
 }
 
 /** Строит нормализованный Input (по умолчанию — на сервере, без аргументов). */
@@ -29,6 +31,7 @@ export function createContext(overrides: Partial<TestContext> = {}): TestContext
     store: new MemoryStore(),
     memory: new InMemoryChannelMemory(),
     logger: createLogger('test', 'error'),
+    services: {},
     ...overrides,
   };
 }

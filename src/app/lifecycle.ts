@@ -104,7 +104,7 @@ export class Lifecycle {
     for (const mod of this.enabledModules) {
       const store = new FileStore(mod.name, this.deps.dataDir);
       this.deps.stores.set(mod.name, store);
-      const ctx = { store, memory: this.deps.memory, logger: this.deps.logger, commands: this.commands };
+      const ctx = { store, memory: this.deps.memory, logger: this.deps.logger, commands: this.commands, services: {} };
       try {
         mod.setup?.(ctx);
       } catch (err) {
@@ -124,6 +124,7 @@ export class Lifecycle {
           memory: this.deps.memory,
           logger: this.deps.logger,
           commands: this.commands,
+          services: {},
         });
       } catch (err) {
         this.deps.logger.error(`onReady модуля "${mod.name}" упал`, err);

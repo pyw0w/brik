@@ -17,6 +17,7 @@ function baseCtx(overrides: { dm?: boolean; authorId?: string } = {}) {
     store: new MemoryStore(),
     memory: new InMemoryChannelMemory(),
     logger: createLogger('test', 'error'),
+    services: {},
   };
 }
 

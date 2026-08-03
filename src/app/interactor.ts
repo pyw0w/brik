@@ -26,7 +26,7 @@ export class InteractionInteractor {
     const store = this.deps.storeFor(module.name);
     if (!store) return undefined;
 
-    const ctx = { input, store, memory: this.deps.memory, logger: this.deps.logger };
+    const ctx = { input, store, memory: this.deps.memory, logger: this.deps.logger, services: {} };
 
     try {
       const pre = await this.deps.pipeline.checkPreconditions(handler, ctx, env.preconditions);
