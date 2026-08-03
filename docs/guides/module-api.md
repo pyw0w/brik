@@ -176,6 +176,8 @@ services: { weather: { enabled: true, options: { apiKey: process.env.WEATHER_API
 
 Жизненный цикл: `init` сервисов — **до** `setup` модулей, `close` — на shutdown в обратном порядке. Ядро строит только сервисы, задекларированные включёнными модулями.
 
+Ещё один рабочий пример — `src/services/shikimori`: реальный GraphQL-клиент с обязательным `User-Agent` (опция `userAgent`) и троттлингом запросов (`minRequestInterval`). См. `src/modules/anime`, который его использует.
+
 ## Порядок гейтов
 
 1. **Предусловия** — не прошло → короткая ошибка.
