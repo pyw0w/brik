@@ -31,3 +31,17 @@ bun run deploy:commands     # register slash commands (REST)
 - Every handler needs a `description` (feeds `/help`).
 - Handlers are pure functions: `run(ctx)` returns a `Result`; the core delivers it. No `ctx.client`.
 - After any change run: `bun test` → `bun run typecheck` → `bun run check:boundaries` → `bun run docs:build`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (this repo), driven via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical roles mapped to repo labels: `triage`, `info-needed`, `agent-ready`, `human-ready`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
