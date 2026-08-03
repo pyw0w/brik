@@ -26,7 +26,7 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GH_TOKEN: ${{ secrets.BOT_PAT }}
-          OPENCODE_PERMISSION: '{ "bash": { "*": "deny", "gh*": "allow" } }'
+          OPENCODE_PERMISSION: '{ "bash": { "*": "deny", "gh*": "allow", "git*": "allow", "bun*": "allow" } }'
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           export PATH="$HOME/.opencode/bin:$PATH"
