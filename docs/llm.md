@@ -45,8 +45,9 @@ src/
 │   ├── internal/       #   implementation: Registry, Pipeline, store, logger, config
 │   ├── discord/        #   discord.js adapter: gateway, registrar, adapter (only place runtime discord.js lives)
 │   └── *.test.ts       #   core tests co-located with code
-└── modules/            # help, ping, roll, … each with a module.test.ts next to it
-scripts/                # create-module, deploy-commands, check-boundaries
+├── modules/            # help, ping, roll, forecast, … each with a module.test.ts next to it
+└── services/           # external dependencies (API clients, connections): weather … (defineService)
+scripts/                # create-module, create-service, deploy-commands, check-boundaries
 docs/                   # guides/, adr/, llm.md
 bot.config.ts           # Enable decisions (which modules, with which options)
 bunfig.toml             # bun test config (path ignore patterns, coverage threshold)
@@ -66,6 +67,7 @@ Use these terms consistently in code, comments, and docs. Avoid synonyms (`plugi
 | **Capability** | A right the Handler/module requires from the Bot in a channel (`EmbedLinks`, `AttachFiles`, …), checked before delivery | platform feature, permission |
 | **Precondition** | A check before the handler runs (user perms, cooldown, NSFW channel…); built-in set + custom hook | guard, middleware |
 | **Store** | Persistent KV provided by the core, namespaced per module; also per-channel dialog memory for multi-step flows | database, memory, cache |
+| **Service** | Named global dependency of modules (API client, connection) in `src/services/<name>/service.ts` via `defineService`; extends `ServiceMap`, injected typed as `ctx.services.<name>` | plugin, connector, third-party |
 | **Registry** | Registry of discovered modules/handlers (auto-discovery); source of truth for what can be enabled | index, collection |
 | **Enable** | A `bot.config.ts` decision about which modules are active and with which options | register, activate, load |
 | **Core** | Public framework contract modules import: `src/core/index.ts`. Stable, documented | framework, runtime, kernel |
@@ -83,6 +85,7 @@ Three layers, each with a strict visibility rule:
 | **Internal** implementation | `src/core/internal/` | ❌ no |
 | Discord adapter | `src/core/discord/` | ❌ no |
 | **Host** | `src/app/`, `src/index.ts` | ❌ no |
+| **Services** | `src/services/` | ✅ yes — only `../../core/index.ts`, like modules |
 
 Rules a module must follow:
 
@@ -133,6 +136,17 @@ Key points:
 - **Public API for other modules**: export plain functions; other modules call those — they never call each other's handlers.
 - **Lifecycle hooks**: `setup(ctx)`, `onReady(ctx)`, `onShutdown()`. `setup` receives a `commands: CommandCatalog` for `/help`-style listings.
 - **Config options**: declare `optionsSchema` (zod); options are validated and injected on startup.
+
+### 6.1 Services (external dependencies)
+
+External APIs/DBs are **not** the module's job (ADR-0002, extended to dependencies by ADR-0008). They live as **services**:
+
+- **Where**: `src/services/<name>/service.ts`, declared via `defineService` (export default). A module can use one via `services: ['name']` on `defineModule`; the core builds **only** the declared ones and injects them typed as `ctx.services.<name>`.
+- **Typing**: a service augments the core's `ServiceMap` interface (`declare module '../../core/index.ts' { interface ServiceMap { weather: ... } }`) — no runtime registration, no global list to maintain.
+- **Lifecycle**: `init({ options, logger, memory })` runs **before** any module `setup`; optional `close(service)` runs on shutdown in reverse order. `init` returns the service object (the API client, connection, …).
+- **Options**: `services.<name>.options` in `bot.config.ts`, validated by the service's `optionsSchema` (zod).
+- **Generator**: `bun run create:service <name>` scaffolds `src/services/<name>/service.ts` (+ a test).
+- **Example**: the demo pair `src/services/weather/service.ts` + `src/modules/forecast/module.ts`.
 
 ## 7. Testing conventions
 
@@ -196,3 +210,4 @@ Architectural decisions live in `docs/adr/` (numbered). Read the relevant ones b
 - Don't call another module's handler directly — use its exported public functions.
 - Don't move files between layers or change the facade without updating `docs/` and the ADRs.
 - Don't add dependencies to modules unless truly necessary — the core contract is the dependency you get.
+- Don't create API clients / DB connections inside a module — that's a **service** (`src/services/`, ADR-0008).

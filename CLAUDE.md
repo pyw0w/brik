@@ -25,6 +25,7 @@ bun run deploy:commands      # register slash commands via REST
 ## Hard rules
 
 - Modules import **only** `../../core/index.ts` (code) and `../../core/testing.ts` (tests). Never `discord.js`, `src/core/internal/**`, `src/core/discord/**`, or `src/app/**` from a module — enforced by `bun run check:boundaries`.
+- Services live in `src/services/<name>/service.ts` (defineService); modules declare them via `services: ['name']` and use typed `ctx.services.<name>`. Services may import only the core facade, like modules.
 - Tests are **co-located** (`src/modules/<name>/module.test.ts` beside `module.ts`); test handlers with `runHandler` from `../../core/testing.ts`.
 - Every handler needs a `description` (feeds `/help`).
 - Handlers are pure: `run(ctx)` returns a `Result`; the core delivers it. No `ctx.client`, no network in handlers.

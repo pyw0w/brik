@@ -120,6 +120,62 @@ await store.has('key')
 
 Данные модуля не пересекаются с данными других модулей (неймспейс по имени).
 
+## Сервисы
+
+**Сервис** — именованная глобальная зависимость модулей (API-клиент, соединение и т.п.). Внешние API/БД — ответственность сервиса, а не модуля (перенос ADR-0002 на уровень зависимостей). Живёт в `src/services/<name>/service.ts` и объявляется через `defineService`:
+
+```ts
+// src/services/weather/service.ts
+import { z } from 'zod';
+import { defineService } from '../../core/index.ts';
+
+export interface WeatherApi {
+  now(city: string): Promise<string>;
+}
+
+declare module '../../core/index.ts' {
+  interface ServiceMap {
+    weather: WeatherApi;          // аугментация типов → типизированный ctx.services.weather
+  }
+}
+
+export default defineService<{ apiKey?: string }>({
+  name: 'weather',
+  description: 'Демо-сервис погоды (эмуляция внешнего API)',
+  optionsSchema: z.object({ apiKey: z.string().optional() }),
+  init: ({ options, logger }) => ({ ... }),   // вернуть сам сервис; ядро вызовет до setup модулей
+  close: async (service) => { ... },          // опционально: закрыть соединение на shutdown
+});
+```
+
+Модуль декларирует нужные сервисы через `services: ['name']` и получает их типизированно в `ctx.services.<name>`:
+
+```ts
+// src/modules/forecast/module.ts
+export default defineModule({
+  name: 'forecast',
+  services: ['weather'],                        // ядро построит только их
+  handlers: [
+    defineHandler({
+      name: 'forecast',
+      description: 'Погода в городе',
+      args: { city: arg.string('Город').default('Москва') },
+      run: async ({ services, args }) =>
+        ({ kind: 'message', content: await services.weather.now(args.city) }),
+    }),
+  ],
+});
+```
+
+Опции сервиса — из `bot.config.ts` секции `services` (валидируются `optionsSchema`):
+
+```ts
+// bot.config.ts
+services: { weather: { enabled: true, options: { apiKey: process.env.WEATHER_API_KEY } } },
+```
+
+Жизненный цикл: `init` сервисов — **до** `setup` модулей, `close` — на shutdown в обратном порядке. Ядро строит только сервисы, задекларированные включёнными модулями.
+
 ## Порядок гейтов
 
 1. **Предусловия** — не прошло → короткая ошибка.
