@@ -42,11 +42,12 @@ export function createContext(overrides: Partial<TestContext> = {}): TestContext
  */
 export async function runHandler(
   handler: Handler,
-  options: { input?: Input; args?: Record<string, unknown> } = {},
+  options: { input?: Input; args?: Record<string, unknown>; services?: ServiceMap } = {},
 ): Promise<Result> {
   const base = createContext();
   const input = options.input ?? { ...base.input, args: options.args ?? {} };
-  return new Pipeline().run(handler, { ...base, input });
+  const services = options.services ?? base.services;
+  return new Pipeline().run(handler, { ...base, input, services });
 }
 
 /** Фейковое ChatInputCommandInteraction для тестов адаптера (каст в тесте). */
