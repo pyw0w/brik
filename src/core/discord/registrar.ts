@@ -1,6 +1,7 @@
 import {
   SlashCommandBuilder,
   type Client,
+  type Guild,
 } from 'discord.js';
 import type { ArgSpec } from '../args.ts';
 import type { Handler } from '../handler.ts';
@@ -65,7 +66,7 @@ export async function syncCommands(
   if (!app) throw new Error('Application недоступен до login()');
 
   if (devGuildId) {
-    const guild = await client.guilds.fetch(devGuildId);
+    const guild = await fetchDevGuild(client, devGuildId);
     await guild.commands.set(commands);
     logger.info(`Зарегистрировано ${commands.length} команд на гильду ${devGuildId}`);
   } else {
@@ -73,4 +74,20 @@ export async function syncCommands(
     logger.info(`Зарегистрировано ${commands.length} команд глобально`);
   }
   return commands.length;
+}
+
+/** Достаёт гильду для dev-регистрации; вместо голого Unknown Guild — понятная ошибка. */
+async function fetchDevGuild(client: Client, guildId: string): Promise<Guild> {
+  try {
+    return await client.guilds.fetch(guildId);
+  } catch (err) {
+    if ((err as { code?: number } | null)?.code === 10004) {
+      throw new Error(
+        `Гильда ${guildId} не найдена: бот не добавлен на этот сервер. ` +
+          'Проверьте DISCORD_DEV_GUILD_ID или пригласите бота (OAuth2 scope=bot+applications.commands).',
+        { cause: err },
+      );
+    }
+    throw err;
+  }
 }
