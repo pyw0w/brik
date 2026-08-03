@@ -1,14 +1,34 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
+import type { ChannelMemory, Logger } from '../../core/index.ts';
 import shikimoriService, { ShikimoriError, type ShikimoriApi } from './service.ts';
 
-const logger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
+const logger: Logger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
+const memory: ChannelMemory = {
+  get: async () => undefined,
+  set: async () => {},
+  delete: async () => {},
+};
 
 const baseOptions = {
   userAgent: 'Brik (Discord bot; https://github.com/pyw0w/brik)',
 };
 
-const initApi = (options: Record<string, unknown> = {}): ShikimoriApi =>
-  shikimoriService.init({ options: { ...baseOptions, ...options }, logger, memory: {} } as never) as ShikimoriApi;
+type InitCtx = Parameters<typeof shikimoriService.init>[0];
+
+const initApi = (options: Record<string, unknown> = {}): ShikimoriApi => {
+  const ctx = {
+    options: { ...baseOptions, ...options },
+    logger,
+    memory,
+  } as InitCtx;
+  return shikimoriService.init(ctx) as ShikimoriApi;
+};
 
 const okJson = (data: unknown, status = 200) =>
   new Response(JSON.stringify({ data }), { status, headers: { 'Content-Type': 'application/json' } });
@@ -100,6 +120,28 @@ describe('shikimori service', () => {
     const api = initApi();
     const result = await api.top(3);
     expect(result).toHaveLength(1);
+  });
+
+  test('limit=0 клампуется в 1', async () => {
+    let requestedLimit: unknown;
+    mockFetch(async (_url, init) => {
+      requestedLimit = JSON.parse(String(init?.body)).variables.limit;
+      return okJson({ animes: [animeRaw] });
+    });
+    const api = initApi();
+    await api.search('x', 0);
+    expect(requestedLimit).toBe(1);
+  });
+
+  test('limit=99 клампуется в максимум', async () => {
+    let requestedLimit: unknown;
+    mockFetch(async (_url, init) => {
+      requestedLimit = JSON.parse(String(init?.body)).variables.limit;
+      return okJson({ animes: [animeRaw] });
+    });
+    const api = initApi();
+    await api.search('x', 99);
+    expect(requestedLimit).toBe(10);
   });
 
   test('animeById запрашивает по ids и возвращает детали', async () => {

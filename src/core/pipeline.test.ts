@@ -1,8 +1,12 @@
-import { describe, expect, setSystemTime, test } from 'bun:test';
+import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
 import { arg, defineHandler, type ServiceMap } from './index.ts';
 import { createLogger } from './internal/logger.ts';
 import { Pipeline } from './internal/pipeline.ts';
 import { InMemoryChannelMemory, MemoryStore } from './internal/store.ts';
+
+afterEach(() => {
+  setSystemTime();
+});
 
 function baseCtx(overrides: { dm?: boolean; authorId?: string } = {}) {
   return {

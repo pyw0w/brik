@@ -11,7 +11,7 @@ interface ListItem {
 
 const formatSummaryLine = (item: ListItem, i: number): string => {
   const title = item.russian ?? item.name;
-  const meta = [item.score !== null ? `оценка ${item.score}` : null, item.airedOn ? item.airedOn.slice(0, 4) : null]
+  const meta = [item.score ? `оценка ${item.score}` : null, item.airedOn ? item.airedOn.slice(0, 4) : null]
     .filter(Boolean)
     .join(' · ');
   return `${i + 1}. **${title}**${meta ? ` — ${meta}` : ''}`;
@@ -75,7 +75,7 @@ const renderInfo = (item: AnimeDetailsLike) => {
   const fields: { name: string; value: string; inline?: boolean }[] = [
     ...(kind ? [{ name: 'Тип', value: kind, inline: true }] : []),
     ...(status ? [{ name: 'Статус', value: status, inline: true }] : []),
-    ...(item.score !== null ? [{ name: 'Оценка', value: String(item.score), inline: true }] : []),
+    ...(item.score ? [{ name: 'Оценка', value: String(item.score), inline: true }] : []),
     ...(item.episodes ? [{ name: 'Эпизоды', value: String(item.episodes), inline: true }] : []),
     ...(year ? [{ name: 'Год', value: year, inline: true }] : []),
     ...(genres ? [{ name: 'Жанры', value: genres }] : []),

@@ -32,6 +32,12 @@ describe('модуль anime', () => {
     };
     const result = await runHandler(findHandler('search'), { args: { query: 'фрирен', limit: 2 }, services });
     expect(result.kind).toBe('embed');
+    if (result.kind === 'embed') {
+      expect(result.embed.description).toContain('Фрирен');
+      expect(result.embed.description).toContain('оценка 9.1');
+      expect(result.embed.description).toContain('Naruto');
+      expect(result.embed.description).toContain('2023');
+    }
   });
 
   test('search с пустым результатом пишет «Ничего не найдено»', async () => {
@@ -118,6 +124,40 @@ describe('команда info', () => {
     };
     const result = await runHandler(findHandler('info'), { args: { target: '52991' }, services });
     expect(result.kind).toBe('embed');
+    if (result.kind === 'embed') {
+      expect(result.embed.title).toBe('Фрирен (Sousou no Frieren)');
+      expect(result.embed.fields?.some((f) => f.name === 'Тип' && f.value === 'ТВ сериал')).toBe(true);
+      expect(result.embed.fields?.some((f) => f.name === 'Оценка' && f.value === '9.1')).toBe(true);
+      expect(result.embed.thumbnail).toEqual({ url: 'https://i.imgur.com/main.jpg' });
+    }
+  });
+
+  test('info с unrated аниме не показывает поле Оценка', async () => {
+    const services = {
+      shikimori: {
+        search: async () => [],
+        top: async () => [],
+        animeById: async () => ({ ...details, score: 0 }),
+      },
+      weather: weatherStub,
+    };
+    const result = await runHandler(findHandler('info'), { args: { target: '52991' }, services });
+    expect(result.kind).toBe('embed');
+    if (result.kind === 'embed') expect(result.embed.fields?.some((f) => f.name === 'Оценка')).toBe(false);
+  });
+
+  test('ошибка сервиса → дружелюбный текст', async () => {
+    const services = {
+      shikimori: {
+        search: async () => [],
+        top: async () => [],
+        animeById: async () => { throw new Error('boom'); },
+      },
+      weather: weatherStub,
+    };
+    const result = await runHandler(findHandler('info'), { args: { target: '52991' }, services });
+    expect(result.kind).toBe('message');
+    if (result.kind === 'message') expect(result.content).toContain('Не удалось получить данные от Shikimori');
   });
 
   test('по названию ищет id, затем берёт полную карточку', async () => {

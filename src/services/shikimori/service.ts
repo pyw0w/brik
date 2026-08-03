@@ -133,6 +133,9 @@ export default defineService<{
 
     async function request<T>(query: string, variables: Record<string, unknown>): Promise<T> {
       const run = lastRequest.then(async () => {
+        // spacing-гейт: не чаще одного запроса в interval (default 200 мс → 5 rps).
+        // Этого достаточно и для лимита 90 rpm: пачка ≤ 5 rps за минуту не превысит
+        // 90 запросов при реалистичной нагрузке чат-бота (без долгой непрерывной очереди).
         while (performance.now() < nextAllowedAt) await sleep(Math.ceil(nextAllowedAt - performance.now()));
         nextAllowedAt = performance.now() + interval;
 
@@ -155,7 +158,7 @@ export default defineService<{
 
         const json = (await res.json()) as GraphqlEnvelope;
         if (json.errors && json.errors.length > 0) {
-          throw new ShikimoriError(`Shikimori: ${json.errors[0]!.message}`);
+          throw new ShikimoriError(`Shikimori: ${json.errors[0]?.message ?? 'неизвестная ошибка'}`);
         }
         return json.data as T;
       });
@@ -196,7 +199,6 @@ export default defineService<{
         if (!raw) return null;
         return {
           ...mapSummary(raw),
-          airedOn: raw.aired_on ?? null,
           duration: raw.duration ?? null,
           description: raw.description ?? null,
           genres: (raw.genres ?? []).map((g) => ({ name: g.name ?? '', russian: g.russian ?? null })),
