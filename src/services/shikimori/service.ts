@@ -50,10 +50,12 @@ const SUMMARY_FIELDS = `
   score
   episodes
   url
-  aired_on
+  airedOn {
+    date
+  }
   poster {
-    main_url
-    preview_url
+    mainUrl
+    previewUrl
   }
 `;
 
@@ -72,7 +74,6 @@ const TOP_QUERY = `query TopAnimes($limit: PositiveInt) {
 const INFO_QUERY = `query AnimeInfo($ids: String) {
   animes(ids: $ids, limit: 1) {
     ${SUMMARY_FIELDS}
-    aired_on
     duration
     description
     genres {
@@ -81,7 +82,7 @@ const INFO_QUERY = `query AnimeInfo($ids: String) {
     }
     studios {
       name
-      image_url
+      imageUrl
     }
   }
 }`;
@@ -98,12 +99,12 @@ interface AnimeRaw {
   score?: number | null;
   episodes?: number | null;
   url?: string;
-  aired_on?: string | null;
-  poster?: { main_url?: string; preview_url?: string } | null;
+  airedOn?: { date?: string | null } | null;
+  poster?: { mainUrl?: string; previewUrl?: string } | null;
   duration?: number | null;
   description?: string | null;
   genres?: { name?: string; russian?: string | null }[] | null;
-  studios?: { name?: string; image_url?: string | null }[] | null;
+  studios?: { name?: string; imageUrl?: string | null }[] | null;
 }
 
 interface GraphqlEnvelope {
@@ -175,8 +176,8 @@ export default defineService<{
       score: raw.score ?? null,
       episodes: raw.episodes ?? 0,
       url: raw.url ?? '',
-      airedOn: raw.aired_on ?? null,
-      poster: raw.poster?.main_url ? { mainUrl: raw.poster.main_url, previewUrl: raw.poster.preview_url ?? raw.poster.main_url } : null,
+      airedOn: raw.airedOn?.date ?? null,
+      poster: raw.poster?.mainUrl ? { mainUrl: raw.poster.mainUrl, previewUrl: raw.poster.previewUrl ?? raw.poster.mainUrl } : null,
     });
 
     return {
@@ -202,7 +203,7 @@ export default defineService<{
           duration: raw.duration ?? null,
           description: raw.description ?? null,
           genres: (raw.genres ?? []).map((g) => ({ name: g.name ?? '', russian: g.russian ?? null })),
-          studios: (raw.studios ?? []).map((s) => ({ name: s.name ?? '', imageUrl: s.image_url ?? null })),
+          studios: (raw.studios ?? []).map((s) => ({ name: s.name ?? '', imageUrl: s.imageUrl ?? null })),
         };
       },
     } satisfies ShikimoriApi;

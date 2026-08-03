@@ -46,12 +46,12 @@ const animeRaw = {
   score: 9.1,
   episodes: 28,
   url: 'https://shikimori.one/animes/52991-sousou-no-frieren',
-  aired_on: '2023-09-29',
+  airedOn: { date: '2023-09-29' },
   duration: 24,
   description: 'Описание аниме.',
-  poster: { main_url: 'https://i.imgur.com/main.jpg', preview_url: 'https://i.imgur.com/preview.jpg' },
+  poster: { mainUrl: 'https://i.imgur.com/main.jpg', previewUrl: 'https://i.imgur.com/preview.jpg' },
   genres: [{ name: 'Adventure', russian: 'Приключения' }],
-  studios: [{ name: 'Madhouse', image_url: null }],
+  studios: [{ name: 'Madhouse', imageUrl: null }],
 };
 
 describe('shikimori service', () => {
@@ -69,6 +69,8 @@ describe('shikimori service', () => {
       expect((init?.headers as Record<string, string>)['User-Agent']).toBe(baseOptions.userAgent);
       expect(body.variables).toEqual({ search: 'фрирен', limit: 5 });
       expect(body.query).toContain('animes');
+      expect(body.query).toContain('airedOn');
+      expect(body.query).not.toContain('aired_on');
       return okJson({ animes: [animeRaw] });
     });
 

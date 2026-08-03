@@ -24,11 +24,13 @@
   - `order: OrderEnum` — default `'ranked'` (топ по рейтингу)
   - `limit: PositiveInt` — default 2, **max 50**, `page: PositiveInt` — default 1
   - `ids: String` — список id через запятую (для info)
-- Поля Anime (сумма из `anime_type.rb`, `db_entry_fields.rb`, `ani_manga_fields.rb`, `description_fields.rb`):
-  - базовые: `id`, `name`, `russian`, `synonyms`, `japanese`, `english`, `url`, `poster`
-  - аниме: `kind`, `status`, `rating`, `origin`, `episodes`, `episodes_aired`, `duration`, `season`, `aired_on`, `released_on`, `studios`, `fansubbers`, `fandubbers`
-  - мета: `score`, `genres { name, russian }`, `description`, `description_html`
-- Poster: `Types::PosterType` → `original_url`, производные `main_2x_url`, `preview_url`, `mini_url` и т.д.
+- Поля Anime — **camelCase** (подтверждено интроспекцией `__type(name: "Anime")` на live-эндпоинте):
+  - базовые: `id`, `name`, `russian`, `synonyms`, `japanese`, `english`, `url`, `poster { mainUrl, previewUrl }`
+  - аниме: `kind`, `status`, `rating`, `origin`, `episodes`, `episodesAired`, `duration`, `season`, `airedOn`, `releasedOn`, `studios { name, imageUrl }`, `fansubbers`, `fandubbers`
+  - мета: `score`, `genres { name, russian }`, `description`, `descriptionHtml`
+- `airedOn`/`releasedOn` — тип `IncompleteDate` (объект), не скаляр: подполя `{ date, day, month, year }`. Для года/даты используем `airedOn { date }`.
+- ⚠️ Поля в **snake_case** (`aired_on`, `main_url`, `preview_url`, `image_url`) из старого Ruby-архива **не существуют** на live-API — ошибка `Field '...' doesn't exist on type 'Anime'`.
+- Poster: `Types::PosterType` → `originalUrl`, производные `main2xUrl`, `previewUrl`, `miniUrl` и т.д. (camelCase).
 
 ## Контракт сервиса
 
