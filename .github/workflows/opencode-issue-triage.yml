@@ -29,8 +29,8 @@ jobs:
 
       - name: Configure git identity
         run: |
-          git config user.name "opencode-bot"
-          git config user.email "opencode-bot@users.noreply.github.com"
+          git config user.name "OCode-bot"
+          git config user.email "OCode-bot@users.noreply.github.com"
 
       - name: Install opencode
         run: curl -fsSL https://opencode.ai/install | bash
