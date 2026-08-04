@@ -192,6 +192,7 @@ Architectural decisions live in `docs/adr/` (numbered). Read the relevant ones b
 - **0007** core-internal-host-layering — the layering this guide describes; curated facade, boundary script, co-located tests, bun conventions.
 - **0008** services-as-lifecycle-managed-dependencies — external deps live as lifecycle-managed services.
 - **0009** component-interactions — buttons are first-class: `components` on a Handler, `Result` kinds `'component'`/`'update'`, `customId` routing.
+- **0010** event-driven-logging-module — gateway-event logging lives in a module via the `onReady(client)` escape hatch, not a core event bridge.
 
 ## 10. AI agent do / don't
 

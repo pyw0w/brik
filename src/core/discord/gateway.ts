@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, type SlashCommandBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, Partials, type SlashCommandBuilder } from 'discord.js';
 import type { Logger } from '../types.ts';
 import { dispatchInteraction, type InteractionHandler } from './adapter.ts';
 import { syncCommands } from './registrar.ts';
@@ -19,7 +19,18 @@ export interface Gateway {
 
 /** Host Discord-клиента: создаёт Client, подписывает события, синхронизирует команды. */
 export function createGateway(deps: GatewayDeps): Gateway {
-  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  const client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.GuildModeration,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.GuildVoiceStates,
+      // Привилегированный интент: нужен для контента удалённых/изменённых сообщений.
+      GatewayIntentBits.MessageContent,
+    ],
+    partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User],
+  });
 
   client.on('interactionCreate', (interaction) => {
     void dispatchInteraction(interaction, {

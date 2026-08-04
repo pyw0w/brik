@@ -271,6 +271,8 @@ describe('dispatchInteraction', () => {
       owners: [],
       logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
     });
-    expect(fake.replies).toEqual([{ content: 'Произошла ошибка при выполнении команды.', ephemeral: true }]);
+    expect(fake.replies).toEqual([
+      { content: 'Произошла ошибка при выполнении команды.', flags: 64 },
+    ]);
   });
 });
