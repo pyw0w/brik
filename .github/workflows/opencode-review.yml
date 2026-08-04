@@ -28,7 +28,13 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GH_TOKEN: ${{ secrets.BOT_PAT }}
-          OPENCODE_PERMISSION: '{ "bash": { "*": "deny", "gh pr view*": "allow", "gh pr diff*": "allow", "gh pr review*": "allow" } }'
+          OPENCODE_PERMISSION: >-
+            { "bash": {
+                "gh pr view*": "allow",
+                "gh pr diff*": "allow",
+                "gh pr review*": "allow",
+                "*": "deny"
+              } }
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           export PATH="$HOME/.opencode/bin:$PATH"
