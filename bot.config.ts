@@ -8,6 +8,7 @@ export default {
     forecast: { enabled: true },
     anime: { enabled: true },
     buttons: { enabled: true },
+    logs: { enabled: true },
   },
   services: {
     shikimori: {

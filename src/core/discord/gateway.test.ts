@@ -24,6 +24,19 @@ afterAll(() => {
 });
 
 describe('createGateway', () => {
+  test('интенты и партиалы покрывают события логов', () => {
+    const gateway = createGateway(makeDeps());
+    clients.push(gateway.client);
+    const bits = gateway.client.options.intents.bitfield;
+    expect(bits & 1).toBe(1); // Guilds
+    expect(bits & 2).toBe(2); // GuildMembers
+    expect(bits & 4).toBe(4); // GuildModeration
+    expect(bits & 512).toBe(512); // GuildMessages
+    expect(bits & 128).toBe(128); // GuildVoiceStates
+    expect(bits & 32768).toBe(32768); // MessageContent
+    expect(gateway.client.options.partials).toContain(3); // Message
+  });
+
   test('ready вызывает onReady и логирует имя бота', () => {
     const logger = { ...silentLogger(), info: mock(() => {}) };
     const onReady = mock(async (_client: Client) => {});

@@ -4,6 +4,7 @@ import {
   ButtonStyle,
   ChannelType,
   EmbedBuilder,
+  MessageFlags,
   PermissionFlagsBits,
   type ButtonStyle as DiscordButtonStyle,
   type ChatInputCommandInteraction,
@@ -131,24 +132,24 @@ export function resultToPayload(result: Result): InteractionReplyOptions {
     case 'message':
       return {
         content: result.content,
-        ...(result.ephemeral ? { ephemeral: true } : {}),
+        ...(result.ephemeral ? { flags: MessageFlags.Ephemeral } : {}),
       };
     case 'embed':
       return {
         embeds: [toApiEmbed(result.embed)],
-        ...(result.ephemeral ? { ephemeral: true } : {}),
+        ...(result.ephemeral ? { flags: MessageFlags.Ephemeral } : {}),
       };
     case 'attachment':
       return {
         ...(result.caption ? { content: result.caption } : {}),
         files: [{ name: result.file.name, attachment: Buffer.from(result.file.data) }],
-        ...(result.ephemeral ? { ephemeral: true } : {}),
+        ...(result.ephemeral ? { flags: MessageFlags.Ephemeral } : {}),
       };
     case 'component':
       return {
         ...(result.content ? { content: result.content } : {}),
         components: result.rows.map(toButtonRow),
-        ...(result.ephemeral ? { ephemeral: true } : {}),
+        ...(result.ephemeral ? { flags: MessageFlags.Ephemeral } : {}),
       };
     case 'multiple': {
       const messages = result.results.filter((r) => r.kind === 'message') as Extract<Result, { kind: 'message' }>[];
@@ -164,7 +165,9 @@ export function resultToPayload(result: Result): InteractionReplyOptions {
           ? { files: files.map((f) => ({ name: f.file.name, attachment: Buffer.from(f.file.data) })) }
           : {}),
         ...(rows.length > 0 ? { components: rows.flatMap((r) => r.rows).map(toButtonRow) } : {}),
-        ...(result.results.some((r) => 'ephemeral' in r && r.ephemeral) ? { ephemeral: true } : {}),
+        ...(result.results.some((r) => 'ephemeral' in r && r.ephemeral)
+          ? { flags: MessageFlags.Ephemeral }
+          : {}),
       };
     }
     case 'update':
@@ -185,9 +188,19 @@ export async function sendResult(
 ): Promise<void> {
   if (result.kind === 'update') {
     if (interaction.isMessageComponent()) {
-      const payload = resultToPayload(result.result) as unknown as InteractionUpdateOptions;
-      if ('ephemeral' in payload) delete payload.ephemeral; // update() не принимает ephemeral
-      await interaction.update(payload).catch(() => undefined);
+      const payload = resultToPayload(result.result) as unknown as {
+        content?: unknown;
+        embeds?: unknown;
+        components?: unknown;
+        flags?: number;
+      };
+      // update() не принимает ephemeral — вычищаем флаг из flags.
+      if (typeof payload.flags === 'number') {
+        const cleared = payload.flags & ~MessageFlags.Ephemeral;
+        if (cleared === 0) delete payload.flags;
+        else payload.flags = cleared;
+      }
+      await interaction.update(payload as unknown as InteractionUpdateOptions).catch(() => undefined);
       return;
     }
     // update из slash-команды невозможен — деградируем до обычного ответа.
