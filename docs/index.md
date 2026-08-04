@@ -6,8 +6,21 @@
 
 - [Getting Started](guides/getting-started.md) — поднять бота за пару минут
 - [Первый модуль](guides/your-first-module.md) — добавить первую команду
-- [Справочник API](guides/module-api.md) — defineHandler / defineModule / предусловия / store
-- [Dev-режим](guides/dev-mode.md) — hot reload и тесты
+- [Dev-режим](guides/dev-mode.md) — hot reload и мгновенная регистрация команд
+
+## Гайды разработчика
+
+- [Архитектура и слои](guides/architecture.md) — contract / internal / host, граница импортов
+- [Справочник API](guides/module-api.md) — defineHandler / defineModule / предусловия / store / сервисы / кнопки
+- [Тестирование](guides/testing.md) — co-located тесты, `runHandler`, покрытие
+
+## Справочник
+
+- [Модули и команды](reference/modules.md) — что сейчас умеет бот (help, roll, anime, logs…)
+
+## Эксплуатация
+
+- [Развёртывание и настройка](guides/operations.md) — `bot.config.ts`, production, интенты
 
 ## О проекте
 
