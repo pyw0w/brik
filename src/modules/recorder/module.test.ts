@@ -45,6 +45,7 @@ const fakeRecorder = (overrides: Partial<Recorder> = {}): Recorder => ({
   stop: () => ({ ok: false, error: 'not implemented' }),
   status: () => undefined,
   handleVoiceState: () => {},
+  seedFromClient: () => {},
   dispose: () => {},
   ...overrides,
 });
@@ -403,8 +404,8 @@ describe('recorder: хэндлеры', () => {
 
 // ===== onReady / onShutdown (module.ts) =====
 
-/** Диск-клиент для onReady: EventEmitter + каналы доставки авто-стопа. */
-function fakeReadyClient() {
+/** Диск-клиент для onReady: EventEmitter + каналы доставки + голосовые состояния для сида. */
+function fakeReadyClient(voiceStates: Array<{ id: string; channelId: string | null; member?: { user?: { username?: string } | null } | null }> = []) {
   const deliveries: { channelId: string; payload: unknown }[] = [];
   const sendable = (id: string) => ({
     id,
@@ -416,10 +417,15 @@ function fakeReadyClient() {
   const channels = new Map<string, ReturnType<typeof sendable>>([
     ['text1', sendable('text1')],
   ]);
+  const guild = {
+    id: 'g1',
+    voiceStates: { cache: { values: () => voiceStates } },
+    channels: { cache: { get: (_id: string) => undefined } },
+  };
   const client = Object.assign(new EventEmitter(), {
     user: { id: 'bot-id' },
     channels: { cache: { get: (id: string) => channels.get(id) } },
-    guilds: { cache: { get: (_guildId: string) => undefined } },
+    guilds: { cache: { get: (_guildId: string) => undefined, values: () => [guild] } },
   }) as unknown as import('../../core/index.ts').ModuleReadyContext['client'];
   return { client, deliveries };
 }
@@ -456,6 +462,35 @@ describe('recorder: onReady / onShutdown', () => {
       input: { commandName: 'record', args: {}, author: { id: 'u1', username: 'alena' }, channel: { id: 'text1', guildId: 'g1' } },
     });
     expect(result).not.toMatchObject({ content: expect.stringContaining('недоступна') });
+    module.onShutdown?.();
+  });
+
+  test('onReady сидит карту каналов: пользователь, сидевший в войсе до подключения, доступен для /record', async () => {
+    // alena сидела в vc1 ДО старта бота — voiceStateUpdate для неё не придёт
+    const { client } = fakeReadyClient([
+      { id: 'u1', channelId: 'vc1', member: { user: { username: 'alena' } } },
+      { id: 'bot-id', channelId: 'vc1' }, // сам бот — не в карту
+    ]);
+    const ctx = createContext();
+    await module.onReady?.({
+      client,
+      store: ctx.store,
+      memory: ctx.memory,
+      logger: silentLogger(),
+      commands: { list: () => [] },
+      options: { maxDurationSeconds: 1800, maxFiles: 10 },
+      services: ctx.services,
+    });
+
+    // /record от alena без аргумента: её канал находится по сид-карте
+    // (гильдии в фейк-клиенте нет → честный ответ «канал не найден»,
+    // но НЕ «вы не в голосовом канале» — карта работает)
+    const result = await runHandler(handlerOf('record'), {
+      input: { commandName: 'record', args: {}, author: { id: 'u1', username: 'alena' }, channel: { id: 'text1', guildId: 'g1' } },
+    });
+    if (result.kind === 'message') {
+      expect(result.content).not.toContain('Вы не в голосовом канале');
+    }
     module.onShutdown?.();
   });
 

@@ -208,6 +208,9 @@ export default defineModule({
         newState.member?.user?.username ?? undefined,
       );
     });
+    // Участники, уже сидевшие в войсе до подключения бота, не генерируют
+    // voiceStateUpdate — сидим карту из текущего состояния гильдий.
+    recorder.seedFromClient();
     voice = recorder;
   },
   onShutdown: () => {

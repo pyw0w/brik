@@ -374,7 +374,9 @@ describe('composeApp с сервисами (offline)', () => {
       pipeline: new (await import('../core/internal/pipeline.ts')).Pipeline(),
       memory: new InMemoryChannelMemory(),
       logger,
-      config: { modules: { badready: { enabled: true }, innocent: { enabled: true } } },
+      // Токен обязателен для ветки с gatewayFactory: в CI DISCORD_TOKEN нет,
+      // и start() падал бы «Не задан токен» раньше вызова gateway.start().
+      config: { token: 'ci-test-token', modules: { badready: { enabled: true }, innocent: { enabled: true } } },
       modulesDir: join(dir, 'modules-badready'),
       servicesDir: join(dir, 'empty-services'),
       dataDir: dir,
@@ -415,6 +417,7 @@ describe('composeApp с сервисами (offline)', () => {
       memory: new InMemoryChannelMemory(),
       logger,
       config: {
+        token: 'ci-test-token',
         modules: {
           opts: { enabled: true, options: { maxDurationSeconds: 600 } },
         },

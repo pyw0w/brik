@@ -61,6 +61,13 @@ export interface GuildMemberLike {
   user?: { username?: string } | null;
 }
 
+/** Голосовое состояние гильдии на старте (структурная совместимость с discord.js). */
+export interface VoiceStateLike {
+  id: string;
+  channelId: string | null;
+  member?: GuildMemberLike | null;
+}
+
 export interface ChannelLike {
   id: string;
   type: number;
@@ -75,11 +82,13 @@ export interface GuildLike {
   id: string;
   voiceAdapterCreator: DiscordGatewayAdapterCreator;
   channels: { cache: { get(channelId: string): ChannelLike | undefined } };
+  /** Голосовые состояния гильдии (Map userId → VoiceState на старте). */
+  voiceStates?: { cache: { values?(): Iterable<VoiceStateLike> } };
 }
 
 export interface ClientLike {
   user?: { id?: string } | null;
-  guilds: { cache: { get(guildId: string): GuildLike | undefined } };
+  guilds: { cache: { get(guildId: string): GuildLike | undefined; values?(): Iterable<GuildLike> } };
   channels: { cache: { get(channelId: string): ChannelLike | undefined } };
 }
 
@@ -137,6 +146,8 @@ export interface Recorder {
   stop(guildId: string): StopOutcome;
   status(guildId: string): SessionStatus | undefined;
   handleVoiceState(userId: string, guildId: string, newChannelId: string | null, isSelf: boolean, username?: string): void;
+  /** Сидит карту «userId → голосовой канал» текущими состояниями всех гильдий (звится из onReady). */
+  seedFromClient(): void;
   dispose(): void;
   onAutoStop?: (info: AutoStopInfo) => void;
 }
@@ -413,6 +424,24 @@ export function createRecorder(client: ClientLike, logger: Logger, overrides: Pa
         memberChannels.delete(userId);
         if (isSelf && sessions.has(guildId)) {
           void autoStop(guildId, 'бот вышел из голосового канала');
+        }
+      }
+    },
+
+    /** Сидит карту каналов голосовыми состояниями, которые были до подключения бота. */
+    seedFromClient() {
+      const guilds = client.guilds.cache.values?.() ?? [];
+      for (const guild of guilds) {
+        const states = guild.voiceStates?.cache.values?.() ?? [];
+        for (const state of states) {
+          if (state.id === client.user?.id) continue;
+          if (state.channelId) {
+            memberChannels.set(state.id, { guildId: guild.id, channelId: state.channelId });
+            const session = sessions.get(guild.id);
+            if (session && session.channelId === state.channelId) {
+              attachUser(session, state.id, state.member?.user?.username ?? undefined);
+            }
+          }
         }
       }
     },
