@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { EventEmitter } from 'node:events';
 import { createContext } from '../../core/testing.ts';
 import module, {
   buildMemberBanned,
@@ -244,6 +245,16 @@ describe('/logs', () => {
     if (result.kind === 'message') expect(result.content).toContain('и так не настроен');
   });
 
+  test('clear с неизвестным типом — ошибка', async () => {
+    const ctx = createContext();
+    const result = await handler.run({
+      ...ctx,
+      args: { action: 'clear', type: 'nope' },
+    } as Parameters<typeof handler.run>[0]);
+    expect(result).toMatchObject({ kind: 'message', ephemeral: true });
+    if (result.kind === 'message') expect(result.content).toContain('Неизвестный тип');
+  });
+
   test('в ДМ настройка отклоняется', async () => {
     const ctx = createContext({ input: { commandName: 'logs', args: {}, author: { id: 'u', username: 'U' }, channel: { id: 'dm' } } });
     const result = await handler.run({
@@ -307,3 +318,199 @@ function jestSend(options: { channelId?: string; throw?: unknown } = {}) {
       : null;
   return { fetch, get calls() { return calls; }, payloads };
 }
+
+// ===== onReady: подписки на gateway-события (фейковый клиент) =====
+
+/** Отправляемый канал: send пишет в общий журнал доставок. */
+function fakeSendableChannel(id: string, deliveries: { channelId: string; payload: unknown }[]) {
+  return {
+    id,
+    isSendable: () => true,
+    send: async (payload: unknown) => {
+      deliveries.push({ channelId: id, payload });
+    },
+  };
+}
+
+/**
+ * Запускает onReady модуля logs: фейковый Client (EventEmitter + channels.cache)
+ * с sendable-каналами и конфигом логов в store. Возвращает клиент и журнал доставок.
+ */
+async function startLogModule(channelIds: string[], config: Record<string, string> = {}) {
+  const deliveries: { channelId: string; payload: unknown }[] = [];
+  const cache = new Map(channelIds.map((id) => [id, fakeSendableChannel(id, deliveries)]));
+  const client = Object.assign(new EventEmitter(), {
+    channels: { cache: { get: (id: string) => cache.get(id) } },
+  }) as unknown as import('../../core/index.ts').ModuleReadyContext['client'];
+  const ctx = createContext();
+  await ctx.store.set('config:g1', config);
+  await module.onReady?.({
+    client,
+    store: ctx.store,
+    memory: ctx.memory,
+    logger: ctx.logger,
+    commands: { list: () => [] },
+    services: ctx.services,
+  });
+  return { client, deliveries, ctx };
+}
+
+/** Каналы доставки для каждого типа логов. */
+function logChannels(deliveries: { channelId: string; payload: unknown }[]) {
+  const sent = deliveries.map((d) => ({
+    channelId: d.channelId,
+    titles: ((d.payload as { embeds: { title?: string }[] }).embeds).map((e) => e.title),
+  }));
+  return sent;
+}
+
+/** Отправляет событие и ждёт, пока fire-and-forget доставка (void sink) завершится. */
+async function emitAndFlush(client: { emit: (event: string, ...args: unknown[]) => void }, event: string, ...args: unknown[]) {
+  client.emit(event, ...args);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+describe('onReady: подписки на gateway-события', () => {
+  test('guildMemberAdd/Remove → members-канал', async () => {
+    const { client, deliveries } = await startLogModule(['cMembers'], { members: 'cMembers' });
+
+    await emitAndFlush(client, 'guildMemberAdd', { guild: { id: 'g1' }, user: { id: '111', username: 'Алиса' } });
+    await emitAndFlush(client, 'guildMemberRemove', { guild: { id: 'g1' }, user: { id: '111', username: 'Алиса' } });
+
+    expect(logChannels(deliveries)).toEqual([
+      { channelId: 'cMembers', titles: ['👋 Участник вошёл'] },
+      { channelId: 'cMembers', titles: ['🚪 Участник вышел'] },
+    ]);
+  });
+
+  test('guildMemberAdd без настроенного канала — молча пропускает', async () => {
+    const { client, deliveries } = await startLogModule([], {});
+    await emitAndFlush(client, 'guildMemberAdd', { guild: { id: 'g1' }, user: { id: '111', username: 'Алиса' } });
+    expect(deliveries).toEqual([]);
+  });
+
+  test('messageDelete: в гильдии → messages-канал, вне гильдии — тишина', async () => {
+    const { client, deliveries } = await startLogModule(['cMessages'], { messages: 'cMessages' });
+
+    await emitAndFlush(client, 'messageDelete', {
+      guild: { id: 'g1' },
+      author: { id: '111', username: 'Алиса' },
+      content: 'секрет',
+      channel: { name: 'чат' },
+    });
+    await emitAndFlush(client, 'messageDelete', {
+      guild: null,
+      author: { id: '111', username: 'Алиса' },
+      content: 'личное',
+      channel: { name: 'dm' },
+    });
+
+    expect(logChannels(deliveries)).toEqual([
+      { channelId: 'cMessages', titles: ['🗑️ Сообщение удалено'] },
+    ]);
+  });
+
+  test('messageDeleteBulk: счётчик и имя канала; без guildId — игнор', async () => {
+    const { client, deliveries } = await startLogModule(['cMessages'], { messages: 'cMessages' });
+
+    await emitAndFlush(client, 'messageDeleteBulk', new Map([['1', {}], ['2', {}]]), {
+      guildId: 'g1',
+      name: 'чат',
+    });
+    await emitAndFlush(client, 'messageDeleteBulk', new Map(), { guildId: undefined, name: 'dm' });
+
+    expect(logChannels(deliveries)).toEqual([
+      { channelId: 'cMessages', titles: ['🧹 Массовое удаление'] },
+    ]);
+    const payload = deliveries[0]!.payload as { embeds: { description?: string }[] };
+    expect(payload.embeds[0]?.description).toContain('**2** сообщений в канале чат');
+  });
+
+  test('messageUpdate: текстовое изменение → лог, бот и «тот же текст» — игнор', async () => {
+    const { client, deliveries } = await startLogModule(['cMessages'], { messages: 'cMessages' });
+
+    await emitAndFlush(client, 'messageUpdate', { content: 'до' }, {
+      guild: { id: 'g1' },
+      author: { id: '111', username: 'Алиса' },
+      content: 'после',
+      channel: { name: 'чат' },
+    });
+    await emitAndFlush(client, 'messageUpdate', { content: 'тот же' }, {
+      guild: { id: 'g1' },
+      author: { id: '222', username: 'Bot', bot: true },
+      content: 'изменённый бот-текст',
+      channel: { name: 'чат' },
+    });
+
+    expect(logChannels(deliveries)).toEqual([
+      { channelId: 'cMessages', titles: ['✏️ Сообщение изменено'] },
+    ]);
+  });
+
+  test('voiceStateUpdate: вход, выход, перемещение → voice-канал; без изменений — тишина', async () => {
+    const { client, deliveries } = await startLogModule(['cVoice'], { voice: 'cVoice' });
+    const guild = {
+      id: 'g1',
+      channels: { cache: { get: (id: string) => (id === 'v1' ? { name: 'Лобби' } : id === 'v2' ? { name: 'Сцена' } : undefined) } },
+    };
+    const user = { id: '111', username: 'Алиса' };
+
+    await emitAndFlush(client, 'voiceStateUpdate', { member: null, guild }, { member: { user }, guild, channelId: 'v1' });
+    await emitAndFlush(client, 'voiceStateUpdate', { member: { user }, guild, channelId: 'v1' }, { member: { user }, guild, channelId: 'v2' });
+    await emitAndFlush(client, 'voiceStateUpdate', { member: { user }, guild, channelId: 'v1' }, { member: { user }, guild, channelId: 'v1' });
+    await emitAndFlush(client, 'voiceStateUpdate', { member: { user }, guild, channelId: 'v2' }, { member: { user }, guild });
+
+    expect(logChannels(deliveries)).toEqual([
+      { channelId: 'cVoice', titles: ['🔊 Вошёл в голосовой канал'] },
+      { channelId: 'cVoice', titles: ['🔀 Перемещён в голосовом канале'] },
+      { channelId: 'cVoice', titles: ['🔇 Вышел из голосового канала'] },
+    ]);
+  });
+
+  test('guildMemberUpdate: ник → mod, тайм-аут → punishments', async () => {
+    const { client, deliveries } = await startLogModule(
+      ['cMod', 'cPunishments'],
+      { mod: 'cMod', punishments: 'cPunishments' },
+    );
+    const user = { id: '111', username: 'Алиса' };
+    const until = new Date('2026-01-02T00:00:00Z');
+    const memberOf = (nick: string, timeoutUntil: Date | null, roles: string[]) => ({
+      user,
+      guild: { id: 'g1' },
+      nickname: nick,
+      communicationDisabledUntil: timeoutUntil,
+      roles: { cache: { map: (fn: (r: { name: string }) => string) => roles.map((name) => fn({ name })) } },
+    });
+
+    await emitAndFlush(client, 'guildMemberUpdate', memberOf('старый', null, []), memberOf('новый', null, []));
+    await emitAndFlush(client, 'guildMemberUpdate', memberOf('ник', null, []), memberOf('ник', until, []));
+
+    expect(logChannels(deliveries)).toEqual([
+      { channelId: 'cMod', titles: ['📝 Изменён ник'] },
+      { channelId: 'cPunishments', titles: ['⛔ Тайм-аут (мут)'] },
+    ]);
+  });
+
+  test('guildBanAdd/Remove → punishments-канал', async () => {
+    const { client, deliveries } = await startLogModule(['cPunishments'], { punishments: 'cPunishments' });
+
+    await emitAndFlush(client, 'guildBanAdd', { guild: { id: 'g1' }, user: { id: '111', username: 'Алиса' }, reason: 'спам' });
+    await emitAndFlush(client, 'guildBanRemove', { guild: { id: 'g1' }, user: { id: '111', username: 'Алиса' } });
+
+    expect(logChannels(deliveries)).toEqual([
+      { channelId: 'cPunishments', titles: ['⛔ Пользователь забанен'] },
+      { channelId: 'cPunishments', titles: ['♻️ Разбан'] },
+    ]);
+  });
+
+  test('конфиг читается из store: событие другого типа не попадает в канал', async () => {
+    const { client, deliveries } = await startLogModule(['cMembers'], { members: 'cMembers' });
+    // messageDelete настроен только для messages; members-канал не получит его
+    await emitAndFlush(client, 'messageDelete', {
+      guild: { id: 'g1' },
+      author: { id: '111', username: 'Алиса' },
+      content: 'секрет',
+      channel: { name: 'чат' },
+    });
+    expect(deliveries).toEqual([]);
+  });
+});

@@ -137,6 +137,30 @@ export default defineService({
 });
 `);
   writeModuleFixture('modules-boom', 'boom', simpleModule('boom', ['boom']));
+
+  writeModuleFixture('modules-badsetup', 'badsetup', `import { defineHandler, defineModule } from '../../../../src/core/index.ts';
+export default defineModule({
+  name: 'badsetup',
+  setup: () => {
+    throw new Error('setup kaboom');
+  },
+  handlers: [
+    defineHandler({ name: 'ping', description: 'Проверка', run: () => ({ kind: 'message', content: 'ok' }) }),
+  ],
+});
+`);
+
+  writeModuleFixture('modules-badready', 'badready', `import { defineHandler, defineModule } from '../../../../src/core/index.ts';
+export default defineModule({
+  name: 'badready',
+  onReady: async () => {
+    throw new Error('ready kaboom');
+  },
+  handlers: [
+    defineHandler({ name: 'ping', description: 'Проверка', run: () => ({ kind: 'message', content: 'ok' }) }),
+  ],
+});
+`);
 });
 
 afterAll(() => {
@@ -271,5 +295,62 @@ describe('composeApp с сервисами (offline)', () => {
       },
     );
     await expect(app.lifecycle.start()).rejects.toThrow(/boom.*init упал/);
+  });
+
+  test('fail-fast: падение setup модуля — ошибка старта', async () => {
+    const app = composeApp({ modules: { badsetup: { enabled: true } } }, {
+      modulesDir: join(dir, 'modules-badsetup'),
+      servicesDir,
+      syncSlashCommands: false,
+      logger,
+    });
+    await expect(app.lifecycle.start()).rejects.toThrow('setup kaboom');
+  });
+
+  test('fail-fast: падение onReady модуля — ошибка старта через gateway', async () => {
+    const { Lifecycle } = await import('./lifecycle.ts');
+    const { Registry } = await import('../core/internal/registry.ts');
+    const { ServiceRegistry } = await import('../core/internal/service-registry.ts');
+    const { InMemoryChannelMemory, FileStore } = await import('../core/internal/store.ts');
+    const { defineModule } = await import('../core/module.ts');
+
+    const badModule = defineModule({
+      name: 'badready',
+      onReady: async () => {
+        throw new Error('ready kaboom');
+      },
+    });
+    const goodModule = defineModule({ name: 'innocent' });
+
+    const registry = new Registry();
+    registry.register(badModule);
+    registry.register(goodModule);
+
+    let readyClient: unknown;
+    const gatewayFactory = (onReady: (client: unknown) => Promise<void>) => ({
+      // как настоящий gateway: onReady зовётся при «clientReady», затем ждём в start()
+      start: async () => {
+        readyClient = { id: 'fake-client' };
+        await onReady(readyClient as never);
+      },
+      destroy: async () => {},
+    });
+
+    const lifecycle = new Lifecycle({
+      registry,
+      pipeline: new (await import('../core/internal/pipeline.ts')).Pipeline(),
+      memory: new InMemoryChannelMemory(),
+      logger,
+      config: { modules: { badready: { enabled: true }, innocent: { enabled: true } } },
+      modulesDir: join(dir, 'modules-badready'),
+      servicesDir: join(dir, 'empty-services'),
+      dataDir: dir,
+      stores: new Map(),
+      serviceRegistry: new ServiceRegistry(),
+      services: new Map(),
+      gatewayFactory: gatewayFactory as never,
+    });
+
+    await expect(lifecycle.start()).rejects.toThrow('ready kaboom');
   });
 });

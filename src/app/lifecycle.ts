@@ -122,11 +122,8 @@ export class Lifecycle {
       const store = new FileStore(mod.name, this.deps.dataDir);
       this.deps.stores.set(mod.name, store);
       const ctx = { store, memory: this.deps.memory, logger: this.deps.logger, commands: this.commands, services: this.servicesMap() };
-      try {
-        mod.setup?.(ctx);
-      } catch (err) {
-        this.deps.logger.error(`setup модуля "${mod.name}" упал`, err);
-      }
+      // Fail-fast: падение setup — ошибка конфигурации модуля, старт прекращается.
+      mod.setup?.(ctx);
     }
   }
 
@@ -134,18 +131,15 @@ export class Lifecycle {
     for (const mod of this.enabledModules) {
       const store = this.deps.stores.get(mod.name);
       if (!store) continue;
-      try {
-        await mod.onReady?.({
-          client,
-          store,
-          memory: this.deps.memory,
-          logger: this.deps.logger,
-          commands: this.commands,
-          services: this.servicesMap(),
-        });
-      } catch (err) {
-        this.deps.logger.error(`onReady модуля "${mod.name}" упал`, err);
-      }
+      // Fail-fast: ошибка onReady ломает сценарии модуля — падаем с понятной причиной.
+      await mod.onReady?.({
+        client,
+        store,
+        memory: this.deps.memory,
+        logger: this.deps.logger,
+        commands: this.commands,
+        services: this.servicesMap(),
+      });
     }
   }
 
