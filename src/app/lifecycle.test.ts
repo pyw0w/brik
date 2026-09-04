@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { z } from 'zod';
 import { composeApp } from './compose.ts';
+import { defineModule } from '../core/module.ts';
 
 const dir = join(import.meta.dir, '..', '..', '.data', 'lifecycle-services-test');
 const modulesDir = join(dir, 'modules');
@@ -155,6 +157,37 @@ export default defineModule({
   name: 'badready',
   onReady: async () => {
     throw new Error('ready kaboom');
+  },
+  handlers: [
+    defineHandler({ name: 'ping', description: 'Проверка', run: () => ({ kind: 'message', content: 'ok' }) }),
+  ],
+});
+`);
+
+  writeModuleFixture('modules-opts', 'opts', `import { z } from 'zod';
+import { defineHandler, defineModule } from '../../../../src/core/index.ts';
+export default defineModule({
+  name: 'opts',
+  optionsSchema: z.object({ maxDurationSeconds: z.number().int().positive().default(1800) }),
+  setup: (ctx) => {
+    (globalThis as Record<string, unknown>).__optsInSetup = ctx.options;
+  },
+  onReady: (ctx) => {
+    (globalThis as Record<string, unknown>).__optsInReady = ctx.options;
+  },
+  handlers: [
+    defineHandler({ name: 'ping', description: 'Проверка', run: () => ({ kind: 'message', content: 'ok' }) }),
+  ],
+});
+`);
+
+  writeModuleFixture('modules-opts-defaults', 'opts-defaults', `import { z } from 'zod';
+import { defineHandler, defineModule } from '../../../../src/core/index.ts';
+export default defineModule({
+  name: 'opts-defaults',
+  optionsSchema: z.object({ maxDurationSeconds: z.number().default(1800) }),
+  setup: (ctx) => {
+    (globalThis as Record<string, unknown>).__optsDefaults = ctx.options;
   },
   handlers: [
     defineHandler({ name: 'ping', description: 'Проверка', run: () => ({ kind: 'message', content: 'ok' }) }),
@@ -352,5 +385,94 @@ describe('composeApp с сервисами (offline)', () => {
     });
 
     await expect(lifecycle.start()).rejects.toThrow('ready kaboom');
+  });
+
+  test('опции модуля инжектятся в setup и onReady (дефолты применены)', async () => {
+    const { Lifecycle } = await import('./lifecycle.ts');
+    const { Registry } = await import('../core/internal/registry.ts');
+    const { ServiceRegistry } = await import('../core/internal/service-registry.ts');
+    const { InMemoryChannelMemory } = await import('../core/internal/store.ts');
+    const { Pipeline } = await import('../core/internal/pipeline.ts');
+
+    // onReady зовётся через фейковую gateway-фабрику
+    const registry = new Registry();
+    registry.register(
+      defineModule({
+        name: 'opts',
+        optionsSchema: z.object({ maxDurationSeconds: z.number().int().positive().default(1800) }),
+        setup: (ctx) => {
+          (globalThis as Record<string, unknown>).__optsInSetup = ctx.options;
+        },
+        onReady: (ctx) => {
+          (globalThis as Record<string, unknown>).__optsInReady = ctx.options;
+        },
+      }),
+    );
+
+    const lifecycle = new Lifecycle({
+      registry,
+      pipeline: new Pipeline(),
+      memory: new InMemoryChannelMemory(),
+      logger,
+      config: {
+        modules: {
+          opts: { enabled: true, options: { maxDurationSeconds: 600 } },
+        },
+      },
+      modulesDir: join(dir, 'modules-opts'),
+      servicesDir: join(dir, 'empty-services'),
+      dataDir: dir,
+      stores: new Map(),
+      serviceRegistry: new ServiceRegistry(),
+      services: new Map(),
+      gatewayFactory: (onReady) => ({
+        start: async () => {
+          await onReady({ id: 'fake-client' } as never);
+        },
+        destroy: async () => {},
+      }) as never,
+    });
+
+    await lifecycle.start();
+    expect((globalThis as Record<string, unknown>).__optsInSetup).toEqual({ maxDurationSeconds: 600 });
+    expect((globalThis as Record<string, unknown>).__optsInReady).toEqual({ maxDurationSeconds: 600 });
+    await lifecycle.shutdown();
+  });
+
+  test('опции модуля без optionsSchema — пустой объект (дефолт применился)', async () => {
+    const { Lifecycle } = await import('./lifecycle.ts');
+    const { Registry } = await import('../core/internal/registry.ts');
+    const { ServiceRegistry } = await import('../core/internal/service-registry.ts');
+    const { InMemoryChannelMemory } = await import('../core/internal/store.ts');
+    const { Pipeline } = await import('../core/internal/pipeline.ts');
+
+    const registry = new Registry();
+    registry.register(
+      defineModule({
+        name: 'opts-defaults',
+        optionsSchema: z.object({ maxDurationSeconds: z.number().default(1800) }),
+        setup: (ctx) => {
+          (globalThis as Record<string, unknown>).__optsDefaults = ctx.options;
+        },
+      }),
+    );
+
+    const lifecycle = new Lifecycle({
+      registry,
+      pipeline: new Pipeline(),
+      memory: new InMemoryChannelMemory(),
+      logger,
+      config: { modules: { 'opts-defaults': { enabled: true } } },
+      modulesDir: join(dir, 'modules-opts-defaults'),
+      servicesDir: join(dir, 'empty-services'),
+      dataDir: dir,
+      stores: new Map(),
+      serviceRegistry: new ServiceRegistry(),
+      services: new Map(),
+      gatewayFactory: undefined,
+    });
+
+    await lifecycle.start();
+    expect((globalThis as Record<string, unknown>).__optsDefaults).toEqual({ maxDurationSeconds: 1800 });
   });
 });

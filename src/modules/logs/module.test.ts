@@ -350,6 +350,7 @@ async function startLogModule(channelIds: string[], config: Record<string, strin
     memory: ctx.memory,
     logger: ctx.logger,
     commands: { list: () => [] },
+    options: {},
     services: ctx.services,
   });
   return { client, deliveries, ctx };

@@ -7,7 +7,7 @@ import { Pipeline } from '../core/internal/pipeline.ts';
 import type { Registry } from '../core/internal/registry.ts';
 import type { ServiceRegistry } from '../core/internal/service-registry.ts';
 import { FileStore } from '../core/internal/store.ts';
-import type { Module } from '../core/module.ts';
+import type { Module, ModuleReadyContext, ModuleSetupContext } from '../core/module.ts';
 import type { Service, ServiceMap } from '../core/service.ts';
 import type { ChannelMemory, CommandCatalog, Logger } from '../core/types.ts';
 
@@ -30,6 +30,8 @@ export interface LifecycleDeps {
 /** Жизненный цикл: discovery → Enable → setup → login → sync → onReady; shutdown в обратном порядке. */
 export class Lifecycle {
   private enabledModules: Module[] = [];
+  /** Опции включённых модулей: имя → провалидированные значения (дефолты применены). */
+  private moduleOptions = new Map<string, unknown>();
   private gateway?: Gateway;
   private commands: CommandCatalog = { list: () => [] };
 
@@ -96,7 +98,7 @@ export class Lifecycle {
     for (const mod of this.deps.registry.getModules()) {
       const entry = this.deps.config.modules[mod.name];
       if (entry && entry.enabled === false) continue;
-      this.validateOptions(mod, entry);
+      this.moduleOptions.set(mod.name, this.validateOptions(mod, entry));
       enabled.push(mod);
     }
     for (const name of Object.keys(this.deps.config.modules)) {
@@ -107,23 +109,29 @@ export class Lifecycle {
     return enabled;
   }
 
-  private validateOptions(mod: Module, entry: ModuleEntry | undefined): void {
+  /** Валидирует опции модуля схемой; возвращает провалидированные значения (дефолты применены). */
+  private validateOptions(mod: Module, entry: ModuleEntry | undefined): unknown {
     const schema = mod.optionsSchema as z.ZodType | undefined;
-    if (!schema) return;
+    if (!schema) return {};
     const result = schema.safeParse(entry?.options ?? {});
     if (!result.success) {
       const issues = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
       throw new Error(`Опции модуля "${mod.name}" невалидны: ${issues}`);
     }
+    return result.data;
+  }
+
+  private optionsOf(mod: Module): unknown {
+    return this.moduleOptions.get(mod.name) ?? {};
   }
 
   private runSetup(): void {
     for (const mod of this.enabledModules) {
       const store = new FileStore(mod.name, this.deps.dataDir);
       this.deps.stores.set(mod.name, store);
-      const ctx = { store, memory: this.deps.memory, logger: this.deps.logger, commands: this.commands, services: this.servicesMap() };
+      const ctx = { store, memory: this.deps.memory, logger: this.deps.logger, commands: this.commands, services: this.servicesMap(), options: this.optionsOf(mod) };
       // Fail-fast: падение setup — ошибка конфигурации модуля, старт прекращается.
-      mod.setup?.(ctx);
+      mod.setup?.(ctx as ModuleSetupContext);
     }
   }
 
@@ -139,7 +147,8 @@ export class Lifecycle {
         logger: this.deps.logger,
         commands: this.commands,
         services: this.servicesMap(),
-      });
+        options: this.optionsOf(mod),
+      } as ModuleReadyContext);
     }
   }
 

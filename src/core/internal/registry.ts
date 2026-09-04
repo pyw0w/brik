@@ -83,7 +83,7 @@ export class Registry {
   }
 
   /** Регистрирует модуль вручную (дискавери зовёт это же; публично — для тестов/хоста). */
-  register(mod: Module): void {
+  register(mod: Module<any>): void {
     if (this.modules.has(mod.name)) {
       throw new Error(`Дубликат имени модуля: ${mod.name}`);
     }
