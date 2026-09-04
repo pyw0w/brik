@@ -40,9 +40,14 @@ export function createGateway(deps: GatewayDeps): Gateway {
     });
   });
 
+  /** Резолвится при clientReady; ошибка onReady пробрасывается в start(). */
+  let onReadyPromise: Promise<void> = Promise.resolve();
+
   client.on('clientReady', () => {
     deps.logger.info(`Подключено как ${client.user?.tag ?? '?'}`);
-    void deps.onReady(client);
+    // Fail-fast: ошибка onReady модулей — в start(), не в unhandled rejection.
+    onReadyPromise = deps.onReady(client);
+    onReadyPromise.catch(() => undefined); // не даём уйти в unhandled rejection
   });
 
   return {
@@ -50,6 +55,8 @@ export function createGateway(deps: GatewayDeps): Gateway {
     async start(token, commands, devGuildId) {
       await client.login(token);
       await syncCommands(client, commands, devGuildId, deps.logger);
+      // Ждём завершения onReady модулей; ошибка — в start() (fail-fast).
+      await onReadyPromise;
     },
     async destroy() {
       await client.destroy();

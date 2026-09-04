@@ -7,6 +7,7 @@ describe('модуль help', () => {
     module.setup?.({
       ...createContext(),
       commands: { list: () => [] },
+      options: {},
     });
     const handler = module.handlers.find((h) => h.name === 'help')!;
     const result = await runHandler(handler, { args: {} });
@@ -25,6 +26,7 @@ describe('модуль help', () => {
           { name: 'ping', description: 'Проверка связи' },
         ],
       },
+      options: {},
     });
     const handler = module.handlers.find((h) => h.name === 'help')!;
     const result = await runHandler(handler, { args: {} });

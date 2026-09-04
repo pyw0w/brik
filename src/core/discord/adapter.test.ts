@@ -198,6 +198,33 @@ describe('sendResult', () => {
     expect(fake.followUps).toEqual([{ content: 'всё равно доставлю' }]);
   });
 
+  test('если и reply, и followUp упали — молчаливая деградация без throw', async () => {
+    const fake = createFakeInteraction();
+    fake.reply = async () => { throw new Error('reply fail'); };
+    fake.followUp = async () => { throw new Error('followUp fail'); };
+    await sendResult(asChat(fake), { kind: 'message', content: 'потеряно' });
+    expect(fake.replies).toEqual([]);
+    expect(fake.followUps).toEqual([]);
+  });
+
+  test('followUp после defer при падении — молчаливая деградация', async () => {
+    const fake = createFakeInteraction();
+    fake.deferred = true;
+    fake.followUp = async () => { throw new Error('followUp fail'); };
+    await sendResult(asChat(fake), { kind: 'message', content: 'потеряно' });
+    expect(fake.followUps).toEqual([]);
+  });
+
+  test('update на кнопке при падении interaction.update — молчаливая деградация', async () => {
+    const fake = createFakeButtonInteraction({ customId: 'counter:reset' });
+    fake.update = async () => { throw new Error('update fail'); };
+    await sendResult(asButton(fake), {
+      kind: 'update',
+      result: { kind: 'message', content: 'не обновится' },
+    });
+    expect(fake.updates).toEqual([]);
+  });
+
   test('update из slash-команды деградирует до reply', async () => {
     const fake = createFakeInteraction();
     await sendResult(asChat(fake), {
@@ -274,5 +301,22 @@ describe('dispatchInteraction', () => {
     expect(fake.replies).toEqual([
       { content: 'Произошла ошибка при выполнении команды.', flags: 64 },
     ]);
+  });
+
+  test('поставка ошибки тоже падает — не роняет процесс (последний рубеж)', async () => {
+    const fake = createFakeButtonInteraction({ customId: 'boom:id' });
+    fake.reply = async () => { throw new Error('всё пропало'); };
+    fake.followUp = async () => { throw new Error('всё пропало'); };
+    const handler: InteractionHandler = {
+      handle: async () => undefined,
+      handleComponent: async () => { throw new Error('взрыв'); },
+    };
+    // не должно бросить: dispatchInteraction ловит и молча деградирует
+    await dispatchInteraction(asButton(fake), {
+      handler,
+      owners: [],
+      logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+    });
+    expect(fake.replies).toEqual([]);
   });
 });

@@ -136,7 +136,7 @@ Key points:
 - **State**: persistent data via `ctx.store` (KV, namespaced by module name); short-lived per-channel state via `ctx.memory`. External DBs/APIs a module holds itself.
 - **Public API for other modules**: export plain functions; other modules call those — they never call each other's handlers.
 - **Lifecycle hooks**: `setup(ctx)`, `onReady(ctx)`, `onShutdown()`. `setup` receives a `commands: CommandCatalog` for `/help`-style listings.
-- **Config options**: declare `optionsSchema` (zod); options are validated and injected on startup.
+- **Config options**: declare `optionsSchema` (zod); options are validated, defaults applied, and injected into `setup`/`onReady` contexts as typed `ctx.options` (fail-fast on invalid).
 
 ### 6.1 Services (external dependencies)
 
@@ -193,6 +193,7 @@ Architectural decisions live in `docs/adr/` (numbered). Read the relevant ones b
 - **0008** services-as-lifecycle-managed-dependencies — external deps live as lifecycle-managed services.
 - **0009** component-interactions — buttons are first-class: `components` on a Handler, `Result` kinds `'component'`/`'update'`, `customId` routing.
 - **0010** event-driven-logging-module — gateway-event logging lives in a module via the `onReady(client)` escape hatch, not a core event bridge.
+- **0011** voice-recording-module — voice recording lives in a module behind the same `onReady(client)` escape hatch; `@discordjs/voice` is isolated in one file; output is WAV (16 кГц, моно): Opus декодируется WASM-декодером `opusscript` и нарезается на чанки под лимит вложений.
 
 ## 10. AI agent do / don't
 

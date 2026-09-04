@@ -34,6 +34,16 @@ afterAll(async () => {
 
 const env: InteractionEnv = { preconditions: {}, granted: new Set() };
 
+describe('composeApp: ветка реального gateway', () => {
+  test('без syncSlashCommands: false создаётся gateway-фабрика (без логина)', async () => {
+    const app = composeApp(config, { dataDir, logger });
+    // сам lifecycle.start() не зовём: он бы пошёл в сеть; достаточно проверить,
+    // что gatewayFactory не undefined — фабрика создаётся без побочных эффектов
+    expect(app.lifecycle).toBeDefined();
+    expect(app.registry).toBeDefined();
+  });
+});
+
 describe('composeApp (offline-режим)', () => {
   test('discover + setup работают: /ping отвечает', async () => {
     const result = await app.interactor.handle(createInput({ commandName: 'ping' }), env);

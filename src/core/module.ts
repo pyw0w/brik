@@ -4,18 +4,23 @@ import type { ChannelMemory, CommandCatalog, Logger, Store } from './types.ts';
 import type { Handler } from './handler.ts';
 import type { ServiceMap } from './service.ts';
 
-export interface ModuleSetupContext {
+export interface ModuleSetupContext<O = Record<string, never>> {
   store: Store;
   memory: ChannelMemory;
   logger: Logger;
   /** Читаемый список команд (для /help); источник — Registry включённых модулей. */
   commands: CommandCatalog;
   services: ServiceMap;
+  /** Опции модуля из bot.config.ts, провалидированные optionsSchema (дефолты применены). */
+  options: O;
 }
 
-export interface ModuleReadyContext extends ModuleSetupContext {
+export interface ModuleReadyContext<O = Record<string, never>> extends ModuleSetupContext<O> {
   client: Client;
 }
+
+/** Опции модуля: вывод из схемы (O = undefined → пустой объект, без контракта). */
+export type ModuleOptionsOf<O> = O extends z.ZodType ? z.infer<O> : Record<string, never>;
 
 export interface ModuleDef<O extends z.ZodType | undefined = undefined> {
   name: string;
@@ -24,8 +29,8 @@ export interface ModuleDef<O extends z.ZodType | undefined = undefined> {
   optionsSchema?: O;
   services?: readonly (keyof ServiceMap)[];
   handlers?: Handler<any>[];
-  setup?(ctx: ModuleSetupContext): void | Promise<void>;
-  onReady?(ctx: ModuleReadyContext): void | Promise<void>;
+  setup?(ctx: ModuleSetupContext<ModuleOptionsOf<O>>): void | Promise<void>;
+  onReady?(ctx: ModuleReadyContext<ModuleOptionsOf<O>>): void | Promise<void>;
   onShutdown?(): void | Promise<void>;
 }
 
@@ -35,8 +40,8 @@ export interface Module<O extends z.ZodType | undefined = undefined> {
   readonly optionsSchema?: O;
   readonly services: readonly string[];
   readonly handlers: Handler<any>[];
-  readonly setup?: (ctx: ModuleSetupContext) => void | Promise<void>;
-  readonly onReady?: (ctx: ModuleReadyContext) => void | Promise<void>;
+  readonly setup?: (ctx: ModuleSetupContext<ModuleOptionsOf<O>>) => void | Promise<void>;
+  readonly onReady?: (ctx: ModuleReadyContext<ModuleOptionsOf<O>>) => void | Promise<void>;
   readonly onShutdown?: () => void | Promise<void>;
 }
 

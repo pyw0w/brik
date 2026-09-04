@@ -21,7 +21,9 @@
     "docs:api": "typedoc --entryPoints src/core/index.ts --exclude '**/internal/**' --exclude '**/discord/**' --exclude '**/*.test.ts' --out docs/.typedoc"
   },
   "dependencies": {
+    "@discordjs/voice": "^0.19.2",
     "discord.js": "^14.27.0",
+    "opusscript": "^0.1.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

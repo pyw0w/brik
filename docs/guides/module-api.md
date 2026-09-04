@@ -18,9 +18,35 @@ defineModule({
 })
 ```
 
-`setup`/`onReady` получают `{ store, memory, logger, commands }` (+ `client` в `onReady` — сырой discord.js для продвинутых сценариев).
+`setup`/`onReady` получают `{ store, memory, logger, commands, options }` (+ `client` в `onReady` — сырой discord.js для продвинутых сценариев). `options` — настройки модуля из `bot.config.ts`, провалидированные `optionsSchema` (дефолты zod применены); у модуля без схемы — пустой объект.
 
 **Публичный API модуля**: экспортируйте функции — другие модули будут их вызывать (Handler-ы Handler-ы не вызывают, см. ADR-0003).
+
+## Опции модуля (`options`)
+
+Опции задаются оператором в `bot.config.ts` и приходят в `setup`/`onReady` типизированными — тип выводится из схемы:
+
+```ts
+import { z } from 'zod';
+import { defineModule } from '../../core/index.ts';
+
+export default defineModule({
+  name: 'recorder',
+  optionsSchema: z.object({
+    maxDurationSeconds: z.number().int().positive().default(1800),
+  }),
+  onReady: ({ options }) => {
+    // options: { maxDurationSeconds: number } — дефолт применён ядром
+  },
+});
+```
+
+```ts
+// bot.config.ts
+modules: { recorder: { enabled: true, options: { maxDurationSeconds: 600 } } }
+```
+
+Невалидные опции — ошибка старта с путём до поля (fail-fast).
 
 ## `CommandCatalog` — список команд
 
