@@ -9,6 +9,14 @@ export default {
     anime: { enabled: true },
     buttons: { enabled: true },
     logs: { enabled: true },
+    recorder: { enabled: true },
+    // recorder: {
+    //   enabled: true,
+    //   options: {
+    //     maxDurationSeconds: 1800, // лимит записи (сек), дефолт 30 мин
+    //     maxFiles: 10,             // максимум файлов в сообщении (≤10)
+    //   },
+    // },
   },
   services: {
     shikimori: {
