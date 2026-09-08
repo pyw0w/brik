@@ -15,6 +15,16 @@ export type {
 export { defineService } from './service.ts';
 export type { Service, ServiceDef, ServiceInitContext, ServiceMap } from './service.ts';
 
+export type {
+  Collection,
+  Database,
+  FilterOperator,
+  QueryFilter,
+  QueryOptions,
+  QueryValue,
+  RunResult,
+} from './database.ts';
+
 export { defineModule } from './module.ts';
 export type {
   Module,

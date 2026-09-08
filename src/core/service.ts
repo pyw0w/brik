@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { Database } from './database.ts';
 import type { ChannelMemory, Logger } from './types.ts';
 
 /** Регистр типов сервисов; расширяется сервисами через `declare module` в их service.ts. */
@@ -8,6 +9,7 @@ export interface ServiceInitContext<O = unknown> {
   options: O;
   logger: Logger;
   memory: ChannelMemory;
+  db: Database;
 }
 
 export interface ServiceDef<O = undefined> {

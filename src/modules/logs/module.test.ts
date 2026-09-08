@@ -347,6 +347,7 @@ async function startLogModule(channelIds: string[], config: Record<string, strin
   await module.onReady?.({
     client,
     store: ctx.store,
+    db: ctx.db,
     memory: ctx.memory,
     logger: ctx.logger,
     commands: { list: () => [] },

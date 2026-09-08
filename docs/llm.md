@@ -133,7 +133,7 @@ Key points:
 - **Handlers are pure**: `run(ctx)` takes `{ input, store, memory, logger, args }` and returns a `Result`. No `ctx.client`, no network. The core delivers the Result to the channel.
 - **Args** are declared with `arg.string/number/integer/boolean/enum(...)`; values are zod-parsed, defaults applied by the Pipeline.
 - **Preconditions** (built-in): `guildOnly`, `dmOnly`, `nsfwOnly`, `ownerOnly`, `permissions`, `cooldown`, `custom`. Option validation on startup comes from `optionsSchema` (zod).
-- **State**: persistent data via `ctx.store` (KV, namespaced by module name); short-lived per-channel state via `ctx.memory`. External DBs/APIs a module holds itself.
+- **State**: unified database access via `ctx.db` (document collections via `collection<T>()` and direct SQL queries/transactions) + persistent KV via `ctx.store` (namespaced by module name); short-lived per-channel state via `ctx.memory`.
 - **Public API for other modules**: export plain functions; other modules call those — they never call each other's handlers.
 - **Lifecycle hooks**: `setup(ctx)`, `onReady(ctx)`, `onShutdown()`. `setup` receives a `commands: CommandCatalog` for `/help`-style listings.
 - **Config options**: declare `optionsSchema` (zod); options are validated, defaults applied, and injected into `setup`/`onReady` contexts as typed `ctx.options` (fail-fast on invalid).
@@ -194,6 +194,7 @@ Architectural decisions live in `docs/adr/` (numbered). Read the relevant ones b
 - **0009** component-interactions — buttons are first-class: `components` on a Handler, `Result` kinds `'component'`/`'update'`, `customId` routing.
 - **0010** event-driven-logging-module — gateway-event logging lives in a module via the `onReady(client)` escape hatch, not a core event bridge.
 - **0011** voice-recording-module — voice recording lives in a module behind the same `onReady(client)` escape hatch; `@discordjs/voice` is isolated in one file; output is WAV (16 кГц, моно): Opus декодируется WASM-декодером `opusscript` и нарезается на чанки под лимит вложений.
+- **0012** unified-database-subsystem — unified SQLite database subsystem via `bun:sqlite`: document collections (`ctx.db.collection<T>()`) + direct SQL/transactions (`ctx.db.query/run/transaction`) with namespacing and in-memory test isolation.
 
 ## 10. AI agent do / don't
 

@@ -1,4 +1,7 @@
+import type { Database } from '../core/database.ts';
 import type { InteractionEnv, ComponentClick } from '../core/discord/adapter.ts';
+import { SqliteEngine } from '../core/internal/database/engine.ts';
+import { ScopedDatabase } from '../core/internal/database/scoped.ts';
 import { capabilityLabel, Pipeline } from '../core/internal/pipeline.ts';
 import type { Registry } from '../core/internal/registry.ts';
 import type {
@@ -17,6 +20,7 @@ export interface InteractorDeps {
   memory: ChannelMemory;
   logger: Logger;
   storeFor(moduleName: string): Store | undefined;
+  dbFor?(moduleName: string): Database | undefined;
   servicesFor(moduleName: string): ServiceMap;
 }
 
@@ -34,10 +38,14 @@ export class InteractionInteractor {
     const { module, handler } = found;
     const store = this.deps.storeFor(module.name);
     if (!store) return undefined;
+    const db =
+      this.deps.dbFor?.(module.name) ??
+      new ScopedDatabase(new SqliteEngine({ path: ':memory:', wal: false }), `mod_${module.name}`);
 
     const ctx = {
       input,
       store,
+      db,
       memory: this.deps.memory,
       logger: this.deps.logger,
       services: this.deps.servicesFor(module.name),
@@ -75,6 +83,9 @@ export class InteractionInteractor {
     const { module, handler, component, payload } = found;
     const store = this.deps.storeFor(module.name);
     if (!store) return undefined;
+    const db =
+      this.deps.dbFor?.(module.name) ??
+      new ScopedDatabase(new SqliteEngine({ path: ':memory:', wal: false }), `mod_${module.name}`);
 
     const ctx = {
       input: {
@@ -84,6 +95,7 @@ export class InteractionInteractor {
         channel: click.channel,
       },
       store,
+      db,
       memory: this.deps.memory,
       logger: this.deps.logger,
       services: this.deps.servicesFor(module.name),

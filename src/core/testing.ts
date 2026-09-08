@@ -1,15 +1,24 @@
+import type { Database } from './database.ts';
 import type { Handler } from './handler.ts';
+import { SqliteEngine } from './internal/database/engine.ts';
 import { createLogger } from './internal/logger.ts';
 import { Pipeline } from './internal/pipeline.ts';
 import { InMemoryChannelMemory, MemoryStore } from './internal/store.ts';
 import type { ServiceMap } from './service.ts';
-import type { Input, Result } from './types.ts';
+import type { Input, Result, Store } from './types.ts';
+
 export interface TestContext {
   input: Input;
-  store: MemoryStore;
+  store: Store;
+  db: Database;
   memory: InMemoryChannelMemory;
   logger: ReturnType<typeof createLogger>;
   services: ServiceMap;
+}
+
+/** Создает изолированную in-memory SQLite базу данных для тестов. */
+export function createTestDatabase(): Database {
+  return new SqliteEngine({ path: ':memory:', wal: false });
 }
 
 /** Строит нормализованный Input (по умолчанию — на сервере, без аргументов). */
@@ -23,11 +32,12 @@ export function createInput(overrides: Partial<Input> = {}): Input {
   };
 }
 
-/** Строит контекст Handler-а: in-memory store, тихая память, заглушенный логгер. */
+/** Строит контекст Handler-а: in-memory store, in-memory db, тихая память, заглушенный логгер. */
 export function createContext(overrides: Partial<TestContext> = {}): TestContext {
   return {
     input: createInput(),
     store: new MemoryStore(),
+    db: overrides.db ?? createTestDatabase(),
     memory: new InMemoryChannelMemory(),
     logger: createLogger('test', 'error'),
     services: {} as ServiceMap,
@@ -41,9 +51,18 @@ export function createContext(overrides: Partial<TestContext> = {}): TestContext
  */
 export async function runHandler(
   handler: Handler,
-  options: { input?: Input; args?: Record<string, unknown>; services?: ServiceMap } = {},
+  options: {
+    input?: Input;
+    args?: Record<string, unknown>;
+    services?: ServiceMap;
+    db?: Database;
+    store?: Store;
+  } = {},
 ): Promise<Result> {
-  const base = createContext();
+  const base = createContext({
+    ...(options.db ? { db: options.db } : {}),
+    ...(options.store ? { store: options.store } : {}),
+  });
   const input = options.input ?? { ...base.input, args: options.args ?? {} };
   const services = options.services ?? base.services;
   return new Pipeline().run(handler, { ...base, input, services });
@@ -55,11 +74,21 @@ export async function runHandler(
  */
 export async function runComponent(
   handler: Handler,
-  options?: { id: string; customId?: string; input?: Input; services?: ServiceMap },
+  options?: {
+    id: string;
+    customId?: string;
+    input?: Input;
+    services?: ServiceMap;
+    db?: Database;
+    store?: Store;
+  },
 ): Promise<Result> {
-  const { id, customId, input, services } = options ?? {};
+  const { id, customId, input, services, db, store } = options ?? {};
   if (!id) throw new Error('runComponent: укажите id компонента');
-  const base = createContext();
+  const base = createContext({
+    ...(db ? { db } : {}),
+    ...(store ? { store } : {}),
+  });
   const component = handler.components.find((c) => c.id === id);
   if (!component) {
     throw new Error(`Компонент "${id}" не объявлен в handler "${handler.name}"`);

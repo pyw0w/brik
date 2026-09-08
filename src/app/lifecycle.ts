@@ -1,15 +1,18 @@
+import type { Database } from '../core/database.ts';
 import type { Client } from 'discord.js';
 import type { z } from 'zod';
 import type { Gateway } from '../core/discord/gateway.ts';
 import { toSlashCommand } from '../core/discord/registrar.ts';
 import { envToken, type BotConfig, type ModuleEntry } from '../core/internal/config.ts';
+import { SqliteEngine } from '../core/internal/database/engine.ts';
+import { ScopedDatabase } from '../core/internal/database/scoped.ts';
+import { SqliteStore } from '../core/internal/database/store.ts';
 import { Pipeline } from '../core/internal/pipeline.ts';
 import type { Registry } from '../core/internal/registry.ts';
 import type { ServiceRegistry } from '../core/internal/service-registry.ts';
-import { FileStore } from '../core/internal/store.ts';
 import type { Module, ModuleReadyContext, ModuleSetupContext } from '../core/module.ts';
 import type { Service, ServiceMap } from '../core/service.ts';
-import type { ChannelMemory, CommandCatalog, Logger } from '../core/types.ts';
+import type { ChannelMemory, CommandCatalog, Logger, Store } from '../core/types.ts';
 
 export interface LifecycleDeps {
   registry: Registry;
@@ -20,7 +23,9 @@ export interface LifecycleDeps {
   modulesDir: string;
   servicesDir: string;
   dataDir: string;
-  stores: Map<string, FileStore>;
+  stores: Map<string, Store>;
+  dbs?: Map<string, Database>;
+  engine?: SqliteEngine;
   serviceRegistry: ServiceRegistry;
   services: Map<string, unknown>;
   /** undefined — не подключаться к Discord (режим без сети, тесты). */
@@ -34,8 +39,18 @@ export class Lifecycle {
   private moduleOptions = new Map<string, unknown>();
   private gateway?: Gateway;
   private commands: CommandCatalog = { list: () => [] };
+  private readonly engine: SqliteEngine;
+  private readonly dbs: Map<string, Database>;
 
-  constructor(private readonly deps: LifecycleDeps) {}
+  constructor(private readonly deps: LifecycleDeps) {
+    this.engine =
+      deps.engine ??
+      new SqliteEngine({
+        path: deps.config.database?.path ?? `${deps.dataDir}/bot.sqlite`,
+        wal: deps.config.database?.wal ?? true,
+      });
+    this.dbs = deps.dbs ?? new Map<string, Database>();
+  }
 
   async start(): Promise<void> {
     const { registry, config, logger } = this.deps;
@@ -91,6 +106,7 @@ export class Lifecycle {
       }
     }
     await this.gateway?.destroy();
+    this.engine.close();
   }
 
   private resolveEnabledModules(): Module[] {
@@ -127,9 +143,25 @@ export class Lifecycle {
 
   private runSetup(): void {
     for (const mod of this.enabledModules) {
-      const store = new FileStore(mod.name, this.deps.dataDir);
-      this.deps.stores.set(mod.name, store);
-      const ctx = { store, memory: this.deps.memory, logger: this.deps.logger, commands: this.commands, services: this.servicesMap(), options: this.optionsOf(mod) };
+      let db = this.dbs.get(mod.name);
+      if (!db) {
+        db = new ScopedDatabase(this.engine, `mod_${mod.name}`);
+        this.dbs.set(mod.name, db);
+      }
+      let store = this.deps.stores.get(mod.name);
+      if (!store) {
+        store = new SqliteStore(db, mod.name);
+        this.deps.stores.set(mod.name, store);
+      }
+      const ctx = {
+        store,
+        db,
+        memory: this.deps.memory,
+        logger: this.deps.logger,
+        commands: this.commands,
+        services: this.servicesMap(),
+        options: this.optionsOf(mod),
+      };
       // Fail-fast: падение setup — ошибка конфигурации модуля, старт прекращается.
       mod.setup?.(ctx as ModuleSetupContext);
     }
@@ -138,11 +170,13 @@ export class Lifecycle {
   private async runModuleReady(client: Client): Promise<void> {
     for (const mod of this.enabledModules) {
       const store = this.deps.stores.get(mod.name);
-      if (!store) continue;
+      const db = this.dbs.get(mod.name);
+      if (!store || !db) continue;
       // Fail-fast: ошибка onReady ломает сценарии модуля — падаем с понятной причиной.
       await mod.onReady?.({
         client,
         store,
+        db,
         memory: this.deps.memory,
         logger: this.deps.logger,
         commands: this.commands,
@@ -169,8 +203,9 @@ export class Lifecycle {
         throw new Error(`Сервис "${name}" отключён в конфиге, но нужен модулю`);
       }
       const options = this.serviceOptions(svc, entry);
+      const svcDb = new ScopedDatabase(this.engine, `svc_${name}`);
       try {
-        const api = await svc.init({ options, logger: this.deps.logger, memory: this.deps.memory });
+        const api = await svc.init({ options, logger: this.deps.logger, memory: this.deps.memory, db: svcDb });
         this.deps.services.set(name, api);
       } catch (err) {
         throw new Error(`Сервис "${name}": init упал: ${String(err)}`);
