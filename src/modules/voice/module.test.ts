@@ -135,8 +135,83 @@ describe('модуль voice: хелперы', () => {
   });
 });
 
+describe('модуль voice: хэндлер /setup', () => {
+  const setupHandler = module.handlers.find((h) => h.name === 'setup')!;
+
+  test('объявляет необходимые предусловия и права', () => {
+    expect(setupHandler.preconditions).toEqual([
+      { type: 'guildOnly' },
+      { type: 'permissions', permissions: ['ManageChannels'] },
+    ]);
+    expect(setupHandler.capabilities).toEqual(['SendMessages']);
+  });
+
+  test('setup: валидирует формат ID', async () => {
+    const ctx = createContext();
+    const res = await runHandler(setupHandler, {
+      args: { category: 'invalid', trigger: 'invalid' },
+      store: ctx.store,
+      db: ctx.db,
+    });
+
+    expect(res.kind).toBe('message');
+    if (res.kind === 'message') {
+      expect(res.ephemeral).toBe(true);
+      expect(res.content).toContain('Неверный формат ID');
+    }
+  });
+
+  test('setup: успешно сохраняет настройки', async () => {
+    const ctx = createContext();
+    const res = await runHandler(setupHandler, {
+      args: {
+        category: '111111111111111111',
+        trigger: '<#222222222222222222>',
+        name: 'Комната {user}',
+      },
+      store: ctx.store,
+      db: ctx.db,
+    });
+
+    expect(res.kind).toBe('message');
+    if (res.kind === 'message') {
+      expect(res.content).toContain('Временные голосовые каналы настроены');
+      expect(res.content).toContain('111111111111111111');
+      expect(res.content).toContain('222222222222222222');
+    }
+
+    const saved = await ctx.store.get<VoiceConfig>('config:guild1');
+    expect(saved).toEqual({
+      categoryId: '111111111111111111',
+      triggerChannelId: '222222222222222222',
+      nameTemplate: 'Комната {user}',
+    });
+  });
+
+  test('setup: в ДМ возвращает ошибку сервера', async () => {
+    const ctx = createContext();
+    const res = await runHandler(setupHandler, {
+      input: {
+        ...ctx.input,
+        channel: { id: 'dm1' },
+        args: {
+          category: '111111111111111111',
+          trigger: '222222222222222222',
+        },
+      },
+      store: ctx.store,
+      db: ctx.db,
+    });
+
+    expect(res.kind).toBe('message');
+    if (res.kind === 'message') {
+      expect(res.content).toContain('только на сервере');
+    }
+  });
+});
+
 describe('модуль voice: хэндлер /voice', () => {
-  const handler = module.handlers[0]!;
+  const handler = module.handlers.find((h) => h.name === 'voice')!;
 
   beforeEach(() => {
     setVoiceManagerForTest(undefined);

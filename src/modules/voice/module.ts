@@ -1,4 +1,4 @@
-import { arg, defineHandler, defineModule } from '../../core/index.ts';
+import { arg, defineHandler, defineModule, type Store } from '../../core/index.ts';
 import {
   configKey,
   createVoiceManager,
@@ -21,10 +21,81 @@ export function getVoiceManager() {
   return activeManager;
 }
 
+/** Общая функция настройки временных каналов (используется в /setup и /voice setup) */
+export async function executeVoiceSetup(params: {
+  guildId: string;
+  category: string | undefined;
+  trigger: string | undefined;
+  name?: string | undefined;
+  store: Store;
+}) {
+  if (!params.category || !params.trigger) {
+    return {
+      kind: 'message' as const,
+      content:
+        '❌ Для настройки укажите оба параметра: категорию (`category`) и триггер-канал (`trigger`).\nПример: `/setup category:123456789012345678 trigger:#создать-войс`',
+      ephemeral: true,
+    };
+  }
+
+  const categoryId = parseChannelMention(params.category);
+  const triggerChannelId = parseChannelMention(params.trigger);
+
+  if (!categoryId || !triggerChannelId) {
+    return {
+      kind: 'message' as const,
+      content: '❌ Неверный формат ID канала или категории. Укажите упоминание (<#123>) или числовой ID.',
+      ephemeral: true,
+    };
+  }
+
+  const config: VoiceConfig = {
+    triggerChannelId,
+    categoryId,
+    ...(params.name?.trim() ? { nameTemplate: params.name.trim() } : {}),
+  };
+
+  await params.store.set(configKey(params.guildId), config);
+
+  return {
+    kind: 'message' as const,
+    content: `✅ **Временные голосовые каналы настроены!**\n• Триггер: <#${triggerChannelId}>\n• Категория: <#${categoryId}>\n• Шаблон: \`${config.nameTemplate ?? DEFAULT_NAME_TEMPLATE}\``,
+  };
+}
+
 export default defineModule({
   name: 'voice',
   description: 'Автосоздание и удаление временных голосовых каналов в категории (Join to Create)',
   handlers: [
+    defineHandler({
+      name: 'setup',
+      description: 'Быстрая настройка временных голосовых каналов (категория и триггер)',
+      args: {
+        category: arg.string('категория для создаваемых комнат (#канал или ID)'),
+        trigger: arg.string('триггер-канал «Создать комнату» (#канал или ID)'),
+        name: arg.string('шаблон названия комнат (по умолчанию: "🔊 {user}")').optional(),
+      },
+      preconditions: [
+        { type: 'guildOnly' },
+        { type: 'permissions', permissions: ['ManageChannels'] },
+      ],
+      capabilities: ['SendMessages'],
+      run: async ({ input, args, store }) => {
+        const guildId = input.channel.guildId;
+        if (!guildId) {
+          return { kind: 'message', content: 'Команда доступна только на сервере', ephemeral: true };
+        }
+
+        return executeVoiceSetup({
+          guildId,
+          category: args.category,
+          trigger: args.trigger,
+          name: args.name,
+          store,
+        });
+      },
+    }),
+
     defineHandler({
       name: 'voice',
       description: 'Управление временными голосовыми каналами: setup, show, clear, cleanup',
@@ -48,37 +119,13 @@ export default defineModule({
         const key = configKey(guildId);
 
         if (args.action === 'setup') {
-          if (!args.category || !args.trigger) {
-            return {
-              kind: 'message',
-              content: '❌ Для настройки укажите оба параметра: категорию (`category`) и триггер-канал (`trigger`).\nПример: `/voice setup category:123456789012345678 trigger:#создать-войс`',
-              ephemeral: true,
-            };
-          }
-
-          const categoryId = parseChannelMention(args.category);
-          const triggerChannelId = parseChannelMention(args.trigger);
-
-          if (!categoryId || !triggerChannelId) {
-            return {
-              kind: 'message',
-              content: '❌ Неверный формат ID канала или категории. Укажите упоминание (<#123>) или числовой ID.',
-              ephemeral: true,
-            };
-          }
-
-          const config: VoiceConfig = {
-            triggerChannelId,
-            categoryId,
-            ...(args.name?.trim() ? { nameTemplate: args.name.trim() } : {}),
-          };
-
-          await store.set(key, config);
-
-          return {
-            kind: 'message',
-            content: `✅ **Временные голосовые каналы настроены!**\n• Триггер: <#${triggerChannelId}>\n• Категория: <#${categoryId}>\n• Шаблон: \`${config.nameTemplate ?? DEFAULT_NAME_TEMPLATE}\``,
-          };
+          return executeVoiceSetup({
+            guildId,
+            category: args.category,
+            trigger: args.trigger,
+            name: args.name,
+            store,
+          });
         }
 
         if (args.action === 'clear') {
@@ -123,7 +170,7 @@ export default defineModule({
         if (!config) {
           return {
             kind: 'message',
-            content: '⚙️ Временные голосовые каналы **не настроены** на этом сервере.\nИспользуйте `/voice setup category:<категория> trigger:<канал>` для включения.',
+            content: '⚙️ Временные голосовые каналы **не настроены** на этом сервере.\nИспользуйте `/setup category:<категория> trigger:<канал>` для включения.',
           };
         }
 
