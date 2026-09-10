@@ -10,6 +10,7 @@ export default {
     buttons: { enabled: true },
     logs: { enabled: true },
     recorder: { enabled: true },
+    voice: { enabled: true },
     // recorder: {
     //   enabled: true,
     //   options: {

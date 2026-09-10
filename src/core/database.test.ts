@@ -248,6 +248,19 @@ describe('ScopedDatabase & isolation', () => {
     expect(doc1?.title).toBe('Item from mod 1');
     expect(doc2?.title).toBe('Item from mod 2');
 
+    // Кэш коллекций
+    expect(dbMod1.collection('items')).toBe(col1);
+
+    // query, queryOne, transaction
+    await dbMod1.exec('CREATE TABLE test_scoped (id INT, name TEXT)');
+    await dbMod1.run('INSERT INTO test_scoped VALUES (1, "alpha")');
+    expect(await dbMod1.query('SELECT * FROM test_scoped')).toHaveLength(1);
+    expect((await dbMod1.queryOne<{ name: string }>('SELECT name FROM test_scoped'))?.name).toBe('alpha');
+    await dbMod1.transaction(async (tx) => {
+      await tx.run('INSERT INTO test_scoped VALUES (2, "beta")');
+    });
+    expect(await dbMod1.query('SELECT * FROM test_scoped')).toHaveLength(2);
+
     engine.close();
   });
 });
