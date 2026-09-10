@@ -478,4 +478,53 @@ describe('composeApp с сервисами (offline)', () => {
     await lifecycle.start();
     expect((globalThis as Record<string, unknown>).__optsDefaults).toEqual({ maxDurationSeconds: 1800 });
   });
+
+  test('мигрирует legacy данные FileStore (.json) в SQLite при первом запуске', async () => {
+    const { Lifecycle } = await import('./lifecycle.ts');
+    const { Registry } = await import('../core/internal/registry.ts');
+    const { ServiceRegistry } = await import('../core/internal/service-registry.ts');
+    const { InMemoryChannelMemory } = await import('../core/internal/store.ts');
+    const { Pipeline } = await import('../core/internal/pipeline.ts');
+    const { existsSync } = await import('node:fs');
+
+    const testDataDir = join(dir, 'legacy-migration-data');
+    mkdirSync(testDataDir, { recursive: true });
+    mkdirSync(join(dir, 'empty-services'), { recursive: true });
+    writeFileSync(join(testDataDir, 'legacy-mod.json'), JSON.stringify({ saved_token: 'secret123', count: 99 }));
+
+    writeModuleFixture(
+      'modules-legacy',
+      'legacy-mod',
+      `import { defineModule } from '../../../../src/core/module.ts';
+export default defineModule({
+  name: 'legacy-mod',
+  handlers: [],
+  setup: async (ctx) => {
+    (globalThis as Record<string, unknown>).__legacyMigratedValue = await ctx.store.get('saved_token');
+  },
+});
+`,
+    );
+
+    const lifecycle = new Lifecycle({
+      registry: new Registry(),
+      pipeline: new Pipeline(),
+      memory: new InMemoryChannelMemory(),
+      logger,
+      config: { modules: { 'legacy-mod': { enabled: true } } },
+      modulesDir: join(dir, 'modules-legacy'),
+      servicesDir: join(dir, 'empty-services'),
+      dataDir: testDataDir,
+      stores: new Map(),
+      serviceRegistry: new ServiceRegistry(),
+      services: new Map(),
+      gatewayFactory: undefined,
+    });
+
+    await lifecycle.start();
+    expect((globalThis as Record<string, unknown>).__legacyMigratedValue).toBe('secret123');
+    expect(existsSync(join(testDataDir, 'legacy-mod.json'))).toBe(false);
+    expect(existsSync(join(testDataDir, 'legacy-mod.json.migrated'))).toBe(true);
+    await lifecycle.shutdown();
+  });
 });

@@ -1,23 +1,22 @@
 import type { Collection, Database, QueryValue, RunResult } from '../../database.ts';
 import { SqliteCollection } from './collection.ts';
-import type { SqliteEngine } from './engine.ts';
 
 /**
- * ScopedDatabase оборачивает SqliteEngine для конкретного модуля или сервиса.
+ * ScopedDatabase оборачивает Database для конкретного модуля или сервиса.
  * Автоматически изолирует коллекции в пространство имён модуля (`mod_<name>_*`).
  */
 export class ScopedDatabase implements Database {
   private readonly collections = new Map<string, SqliteCollection<any>>();
 
   constructor(
-    private readonly engine: SqliteEngine,
+    private readonly engine: Database,
     readonly namespace: string,
   ) {}
 
   collection<T = Record<string, unknown>>(name: string): Collection<T> {
     const existing = this.collections.get(name);
     if (existing) return existing as Collection<T>;
-    const col = new SqliteCollection<T>(this.engine, this.namespace, name);
+    const col = new SqliteCollection<T>(this, this.namespace, name);
     this.collections.set(name, col);
     return col;
   }
@@ -39,8 +38,8 @@ export class ScopedDatabase implements Database {
   }
 
   async transaction<R>(fn: (tx: Database) => Promise<R> | R): Promise<R> {
-    return this.engine.transaction(async () => {
-      return fn(this);
+    return this.engine.transaction(async (tx) => {
+      return fn(new ScopedDatabase(tx, this.namespace));
     });
   }
 }

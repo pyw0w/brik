@@ -1,5 +1,7 @@
 import type { Database } from '../core/database.ts';
 import type { Client } from 'discord.js';
+import { existsSync, readFileSync, renameSync } from 'node:fs';
+import { join } from 'node:path';
 import type { z } from 'zod';
 import type { Gateway } from '../core/discord/gateway.ts';
 import { toSlashCommand } from '../core/discord/registrar.ts';
@@ -71,7 +73,7 @@ export class Lifecycle {
           .map((h) => ({ name: h.name, description: h.description })),
     };
 
-    this.runSetup();
+    await this.runSetup();
 
     if (!this.deps.gatewayFactory) {
       logger.info('Подключение к Discord пропущено (offline-режим)');
@@ -141,7 +143,7 @@ export class Lifecycle {
     return this.moduleOptions.get(mod.name) ?? {};
   }
 
-  private runSetup(): void {
+  private async runSetup(): Promise<void> {
     for (const mod of this.enabledModules) {
       let db = this.dbs.get(mod.name);
       if (!db) {
@@ -152,6 +154,7 @@ export class Lifecycle {
       if (!store) {
         store = new SqliteStore(db, mod.name);
         this.deps.stores.set(mod.name, store);
+        await this.migrateLegacyFileStore(mod.name, store);
       }
       const ctx = {
         store,
@@ -163,7 +166,33 @@ export class Lifecycle {
         options: this.optionsOf(mod),
       };
       // Fail-fast: падение setup — ошибка конфигурации модуля, старт прекращается.
-      mod.setup?.(ctx as ModuleSetupContext);
+      await mod.setup?.(ctx as ModuleSetupContext);
+    }
+  }
+
+  /** Однократная миграция данных FileStore (.data/<module>.json) в SQLite при переходе */
+  private async migrateLegacyFileStore(moduleName: string, store: Store): Promise<void> {
+    const legacyFile = join(this.deps.dataDir, `${moduleName}.json`);
+    if (!existsSync(legacyFile)) return;
+    try {
+      const raw = JSON.parse(readFileSync(legacyFile, 'utf8'));
+      if (raw && typeof raw === 'object') {
+        const entries = Object.entries(raw as Record<string, unknown>);
+        if (entries.length > 0) {
+          for (const [key, value] of entries) {
+            const hasKey = await store.has(key);
+            if (!hasKey) {
+              await store.set(key, value);
+            }
+          }
+          this.deps.logger.info(
+            `Мигрированы данные FileStore (${entries.length} записей) для модуля "${moduleName}" в SQLite`,
+          );
+        }
+      }
+      renameSync(legacyFile, `${legacyFile}.migrated`);
+    } catch (err) {
+      this.deps.logger.warn(`Не удалось мигрировать legacy FileStore для модуля "${moduleName}"`, { error: err });
     }
   }
 

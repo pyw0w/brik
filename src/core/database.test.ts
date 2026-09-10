@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { defineHandler } from './handler.ts';
-import { SqliteCollection } from './internal/database/collection.ts';
+import { encodeNamespace, SqliteCollection } from './internal/database/collection.ts';
 import { SqliteEngine } from './internal/database/engine.ts';
 import { ScopedDatabase } from './internal/database/scoped.ts';
 import { SqliteStore } from './internal/database/store.ts';
@@ -260,6 +260,71 @@ describe('ScopedDatabase & isolation', () => {
       await tx.run('INSERT INTO test_scoped VALUES (2, "beta")');
     });
     expect(await dbMod1.query('SELECT * FROM test_scoped')).toHaveLength(2);
+
+    engine.close();
+  });
+
+  test('пространства имён с дефисом и подчеркиванием не коллидируют', async () => {
+    const engine = new SqliteEngine({ path: ':memory:', wal: false });
+    const dbHyphen = new ScopedDatabase(engine, 'foo-bar');
+    const dbUnderscore = new ScopedDatabase(engine, 'foo_bar');
+
+    const colHyphen = dbHyphen.collection('items');
+    const colUnderscore = dbUnderscore.collection('items');
+
+    expect(encodeNamespace('foo-bar')).not.toBe(encodeNamespace('foo_bar'));
+    expect((colHyphen as SqliteCollection).tableName).not.toBe((colUnderscore as SqliteCollection).tableName);
+
+    await colHyphen.insert({ name: 'hyphen' });
+    await colUnderscore.insert({ name: 'underscore' });
+
+    expect(await colHyphen.count()).toBe(1);
+    expect(await colUnderscore.count()).toBe(1);
+
+    const docH = (await colHyphen.find())[0];
+    const docU = (await colUnderscore.find())[0];
+
+    expect(docH?.name).toBe('hyphen');
+    expect(docU?.name).toBe('underscore');
+
+    engine.close();
+  });
+
+  test('изоляция параллельных операций во время незавершённой транзакции', async () => {
+    const engine = new SqliteEngine({ path: ':memory:', wal: false });
+    await engine.exec('CREATE TABLE concurrency_test (id INT, val TEXT)');
+
+    let txStarted = false;
+    let finishTx: () => void = () => {};
+    const waitPromise = new Promise<void>((resolve) => {
+      finishTx = resolve;
+    });
+
+    // Запускаем транзакцию, которая делает асинхронную паузу и затем падает
+    const txPromise = engine
+      .transaction(async (tx) => {
+        await tx.run('INSERT INTO concurrency_test VALUES (1, "in_tx")');
+        txStarted = true;
+        await waitPromise;
+        throw new Error('rollback transaction');
+      })
+      .catch(() => 'rolled_back');
+
+    while (!txStarted) {
+      await new Promise((r) => setTimeout(r, 2));
+    }
+
+    // Параллельная операция на том же engine
+    const concurrentRunPromise = engine.run('INSERT INTO concurrency_test VALUES (2, "concurrent")');
+
+    finishTx();
+    await txPromise;
+    await concurrentRunPromise;
+
+    const rows = await engine.query<{ id: number; val: string }>('SELECT * FROM concurrency_test');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(2);
+    expect(rows[0]?.val).toBe('concurrent');
 
     engine.close();
   });
