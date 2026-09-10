@@ -3,6 +3,7 @@ import { arg, defineHandler, type ServiceMap } from './index.ts';
 import { createLogger } from './internal/logger.ts';
 import { Pipeline } from './internal/pipeline.ts';
 import { InMemoryChannelMemory, MemoryStore } from './internal/store.ts';
+import { createTestDatabase } from './testing.ts';
 
 afterEach(() => {
   setSystemTime();
@@ -19,6 +20,7 @@ function baseCtx(overrides: { dm?: boolean; authorId?: string } = {}) {
         : { id: 'channel1', guildId: 'guild1' },
     },
     store: new MemoryStore(),
+    db: createTestDatabase(),
     memory: new InMemoryChannelMemory(),
     logger: createLogger('test', 'error'),
     services: {} as ServiceMap,

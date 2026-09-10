@@ -1,11 +1,13 @@
 import type { Client } from 'discord.js';
 import type { z } from 'zod';
+import type { Database } from './database.ts';
 import type { ChannelMemory, CommandCatalog, Logger, Store } from './types.ts';
 import type { Handler } from './handler.ts';
 import type { ServiceMap } from './service.ts';
 
 export interface ModuleSetupContext<O = Record<string, never>> {
   store: Store;
+  db: Database;
   memory: ChannelMemory;
   logger: Logger;
   /** Читаемый список команд (для /help); источник — Registry включённых модулей. */

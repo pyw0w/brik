@@ -439,6 +439,7 @@ describe('recorder: onReady / onShutdown', () => {
     await module.onReady?.({
       client,
       store: ctx.store,
+      db: ctx.db,
       memory: ctx.memory,
       logger: silentLogger(),
       commands: { list: () => [] },
@@ -475,6 +476,7 @@ describe('recorder: onReady / onShutdown', () => {
     await module.onReady?.({
       client,
       store: ctx.store,
+      db: ctx.db,
       memory: ctx.memory,
       logger: silentLogger(),
       commands: { list: () => [] },
@@ -500,6 +502,7 @@ describe('recorder: onReady / onShutdown', () => {
     await module.onReady?.({
       client,
       store: ctx.store,
+      db: ctx.db,
       memory: ctx.memory,
       logger: silentLogger(),
       commands: { list: () => [] },

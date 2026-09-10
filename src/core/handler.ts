@@ -9,6 +9,7 @@ import type {
 export interface HandlerRunContext {
   input: import('./types.ts').Input;
   store: import('./types.ts').Store;
+  db: import('./database.ts').Database;
   memory: import('./types.ts').ChannelMemory;
   logger: import('./types.ts').Logger;
   services: ServiceMap;

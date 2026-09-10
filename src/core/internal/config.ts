@@ -5,9 +5,18 @@ export interface ModuleEntry {
   options?: Record<string, unknown>;
 }
 
+export interface DatabaseConfig {
+  /** Путь к файлу SQLite (по умолчанию '.data/bot.sqlite') или ':memory:' */
+  path?: string;
+  /** Включить WAL (Write-Ahead Logging) режим для SQLite (по умолчанию true) */
+  wal?: boolean;
+}
+
 export interface BotConfig {
   /** Токен бота (обычно из окружения DISCORD_TOKEN). */
   token?: string;
+  /** Настройки базы данных (SQLite). */
+  database?: DatabaseConfig;
   /** Ключи — имена модулей; решения Enable. */
   modules: Record<string, ModuleEntry>;
   /** Опции и включение сервисов (services.<name>.options). */
